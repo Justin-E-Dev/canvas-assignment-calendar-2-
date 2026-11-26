@@ -7,6 +7,7 @@ const STORE = {
   done: "cac.done",
   hideDone: "cac.hideDone",
   range: "cac.range",
+  estimates: "cac.estimates",
 };
 
 // How far ahead the "Due in the next…" list looks.
@@ -116,9 +117,87 @@ function parseICS(text) {
   return events.sort((a, b) => a.due - b.due);
 }
 
+// ---------- Time estimates ----------
+// A rough guess of how long an assignment takes, from its title and description.
+// Rules are checked in order; the first one whose pattern matches the title wins
+// (or the description, if nothing matches the title).
+const TASK_TYPES = [
+  { kind: "quick task", re: /\b(survey|attendance|check-?in|syllabus|introduce yourself|acknowledg)/, minutes: 10 },
+  { kind: "final exam", re: /\bfinal (exam|test)\b/, minutes: 240, study: true },
+  { kind: "exam", re: /\b(midterm|exam)\b/, minutes: 180, study: true },
+  { kind: "research paper", re: /\b(research|term|final) (paper|essay)\b/, minutes: 480, writing: true },
+  { kind: "proposal", re: /\b(proposal|outline|abstract|thesis statement)\b/, minutes: 90, writing: true },
+  { kind: "lab report", re: /\blab (report|write-?up)\b/, minutes: 180, writing: true },
+  { kind: "draft", re: /\b(rough )?draft\b/, minutes: 150, writing: true },
+  { kind: "essay", re: /\b(essay|paper|report|analysis|memo|article)\b/, minutes: 240, writing: true },
+  { kind: "project", re: /\b(project|portfolio|capstone)\b/, minutes: 360 },
+  { kind: "presentation", re: /\b(presentation|slides|speech|poster)\b/, minutes: 180 },
+  { kind: "lab", re: /\blab\b/, minutes: 120 },
+  { kind: "test", re: /\btest\b/, minutes: 90, study: true },
+  { kind: "quiz", re: /\bquiz\b/, minutes: 30 },
+  { kind: "problem set", re: /\b(problem set|pset|homework|hw|worksheet|exercises?|assignment)\b/, minutes: 90 },
+  { kind: "discussion post", re: /\b(discussion|forum|post|reply|response|reflection|journal|blog)\b/, minutes: 45, writing: true },
+  { kind: "reading", re: /\b(reading|read|chapters?|textbook|article)\b/, minutes: 60, reading: true },
+  { kind: "video", re: /\b(video|watch|lecture|podcast|module)\b/, minutes: 45 },
+];
+
+function estimateTime(title, description) {
+  const t = (title || "").toLowerCase();
+  const d = (description || "").toLowerCase();
+  const type = TASK_TYPES.find((x) => x.re.test(t)) || TASK_TYPES.find((x) => x.re.test(d)) ||
+    { kind: "assignment", minutes: 60 };
+  const why = [type.kind];
+  let minutes = type.minutes;
+  const num = (re) => {
+    const m = d.match(re) || t.match(re);
+    return m ? parseInt(m[1].replace(/,/g, ""), 10) : 0;
+  };
+
+  // Details in the text that change the guess.
+  const words = num(/(\d[\d,]*)\s*(?:-|–|to\s*\d[\d,]*\s*)?\s*words?\b/);
+  const pages = num(/(\d+)\s*(?:-|–|to\s*\d+\s*)?\s*pages?\b/);
+  const questions = num(/(\d+)\s*(?:questions|problems|exercises)\b/);
+  const chapters = num(/(\d+)\s*chapters\b/);
+
+  if (words >= 100 && words <= 20000) {
+    // About 300 finished words an hour, plus time to plan and edit.
+    minutes = Math.max(minutes * 0.5, (words / 300) * 60 + 30);
+    why.push(`${words.toLocaleString()} words`);
+  } else if (pages > 0 && pages <= 100) {
+    if (type.reading) {
+      minutes = pages * 4;
+      why.push(`${pages} pages to read`);
+    } else {
+      minutes = Math.max(minutes * 0.5, pages * 60 + 30);
+      why.push(`${pages} pages`);
+    }
+  } else if (questions > 0 && questions <= 200) {
+    const each = type.kind === "quiz" || type.kind === "test" ? 2 : 8;
+    minutes = Math.max(15, questions * each);
+    why.push(`${questions} questions`);
+  } else if (chapters > 0 && chapters <= 30) {
+    minutes = chapters * 50;
+    why.push(`${chapters} chapters`);
+  }
+  if (type.study) why.push("includes study time");
+  if (/\b(group|team)\b/.test(t + " " + d)) {
+    minutes *= 1.25;
+    why.push("group work");
+  }
+
+  minutes = Math.min(Math.max(15, Math.round(minutes / 15) * 15), 20 * 60);
+  return { minutes, why: why.join(", ") };
+}
+
+function fmtDuration(minutes) {
+  const h = Math.floor(minutes / 60), m = minutes % 60;
+  if (!h) return `${m}m`;
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+
 // Let Node load the parser for testing; the rest only runs in a browser.
 if (typeof module !== "undefined") {
-  module.exports = { parseICS };
+  module.exports = { parseICS, estimateTime, fmtDuration };
 }
 
 // ---------- App ----------
@@ -132,7 +211,17 @@ if (typeof document !== "undefined") {
     hideDone: load(STORE.hideDone, false),
     range: RANGES[load(STORE.range, "1w")] ? load(STORE.range, "1w") : "1w",
     weekStart: startOfWeek(new Date()),
+    estimates: load(STORE.estimates, {}), // your own corrections, by assignment id
   };
+
+  // Time for an assignment: your correction if you made one, otherwise the guess.
+  function timeFor(e) {
+    if (typeof state.estimates[e.id] === "number") return { minutes: state.estimates[e.id], mine: true };
+    return { ...estimateTime(e.title, e.description), mine: false };
+  }
+  // Total time still to do (skips finished work).
+  const timeLeft = (items) =>
+    items.filter((e) => !state.done.has(e.id)).reduce((sum, e) => sum + timeFor(e).minutes, 0);
 
   function startOfWeek(d) {
     const s = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -180,8 +269,10 @@ if (typeof document !== "undefined") {
 
     const body = document.createElement("button");
     body.className = "task-body";
+    const time = timeFor(e);
     body.innerHTML = `<div class="task-title">${escapeHtml(e.title)}</div>
-      <div class="task-meta">${escapeHtml(metaText)}</div>`;
+      <div class="task-meta">${escapeHtml(metaText)}</div>
+      <span class="time-pill" title="${time.mine ? "Your estimate" : "Estimated time"}">${time.mine ? "" : "~"}${fmtDuration(time.minutes)}</span>`;
     body.onclick = () => showDetail(e);
 
     card.append(check, body);
@@ -203,13 +294,15 @@ if (typeof document !== "undefined") {
     const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const board = $("board");
     board.innerHTML = "";
-    let total = 0, left = 0;
+    let total = 0, left = 0, minutesLeft = 0;
 
     for (let i = 0; i < 7; i++) {
       const d = addDays(start, i);
       const items = byDay[dayKey(d)] || [];
       total += items.length;
       left += items.filter((e) => !state.done.has(e.id)).length;
+      const dayMinutes = timeLeft(items);
+      minutesLeft += dayMinutes;
 
       const col = document.createElement("div");
       col.className = "day-col";
@@ -220,7 +313,7 @@ if (typeof document !== "undefined") {
       col.innerHTML = `<div class="day-head">
           <span class="day-name">${d.toLocaleDateString(undefined, { weekday: "short" })}</span>
           <span class="day-num">${d.getDate()}</span>
-        </div>${sameDay(d, today) ? `<span class="today-badge">Today</span>` : ""}`;
+        </div>${dayMinutes ? `<div class="day-load">~${fmtDuration(dayMinutes)} of work</div>` : ""}${sameDay(d, today) ? `<span class="today-badge">Today</span>` : ""}`;
 
       for (const e of items) col.appendChild(taskCard(e, `${e.course} · ${fmtTime(e)}`));
       if (!items.length) col.insertAdjacentHTML("beforeend", `<div class="day-empty">Nothing due</div>`);
@@ -230,7 +323,7 @@ if (typeof document !== "undefined") {
     const isThisWeek = sameDay(start, startOfWeek(today));
     const when = isThisWeek ? "this week" : "that week";
     $("weekSummary").textContent = total
-      ? `${left} of ${total} left ${when}`
+      ? `${left} of ${total} left ${when}` + (minutesLeft ? ` · about ${fmtDuration(minutesLeft)} of work` : "")
       : `Nothing due ${when}`;
   }
 
@@ -251,6 +344,8 @@ if (typeof document !== "undefined") {
 
     const list = $("upcoming");
     list.innerHTML = "";
+    const mins = timeLeft(items);
+    $("rangeTotal").textContent = mins ? `About ${fmtDuration(mins)} of work left` : "";
     if (!items.length) {
       list.innerHTML = `<li class="empty">Nothing due in the next ${range.label}. Nice!</li>`;
       return;
@@ -287,11 +382,17 @@ if (typeof document !== "undefined") {
       <h3>${escapeHtml(e.title)}</h3>
       <div class="meta"><span class="dot" style="--c:${state.courseColors[e.course]}"></span>${escapeHtml(e.course)}
         &middot; Due ${fmtDay(e.due)}, ${fmtTime(e)}</div>
+      <div class="estimate">
+        <label for="estSelect">Time to complete</label>
+        <select id="estSelect"></select>
+        <p class="est-why"></p>
+      </div>
       ${desc ? `<div class="desc">${escapeHtml(desc.slice(0, 1500))}${desc.length > 1500 ? "…" : ""}</div>` : ""}
       <div class="actions">
         <button id="doneBtn" class="btn">${isDone ? "Mark as not done" : "Mark as done"}</button>
         ${e.url ? `<a class="btn btn-ghost" href="${escapeHtml(e.url)}" target="_blank" rel="noopener">Open in Canvas</a>` : ""}
       </div>`;
+    fillEstimate(e);
     $("doneBtn").onclick = () => {
       toggleDone(e.id);
       hideDetail();
@@ -299,6 +400,28 @@ if (typeof document !== "undefined") {
     document.querySelector(".modal-card").style.setProperty("--c", state.courseColors[e.course]);
     $("detail").classList.remove("hidden");
   }
+  const EST_CHOICES = [15, 30, 45, 60, 90, 120, 150, 180, 240, 300, 360, 480, 600, 720, 960, 1200];
+
+  function fillEstimate(e) {
+    const guess = estimateTime(e.title, e.description);
+    const time = timeFor(e);
+    const sel = $("estSelect");
+    const choices = [...new Set([...EST_CHOICES, guess.minutes, time.minutes])].sort((a, b) => a - b);
+    sel.innerHTML = `<option value="guess">Guess: ~${fmtDuration(guess.minutes)}</option>` +
+      choices.map((m) => `<option value="${m}">${fmtDuration(m)}</option>`).join("");
+    sel.value = time.mine ? String(time.minutes) : "guess";
+    $("detailBody").querySelector(".est-why").textContent = time.mine
+      ? `You set this. Our guess was ~${fmtDuration(guess.minutes)} (${guess.why}).`
+      : `Guessed from: ${guess.why}. Change it if you know better, and we'll remember.`;
+    sel.onchange = () => {
+      if (sel.value === "guess") delete state.estimates[e.id];
+      else state.estimates[e.id] = Number(sel.value);
+      save(STORE.estimates, state.estimates);
+      fillEstimate(e);
+      renderAll();
+    };
+  }
+
   function hideDetail() {
     $("detail").classList.add("hidden");
   }

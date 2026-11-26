@@ -5,6 +5,7 @@ A bold, colorful assignment board built from your Canvas calendar feed. It shows
 - A week board with one column per day and each assignment as a colored card
 - Each course in its own color
 - A "Due in the next…" list you can set to 1 week, 2 weeks, or a month
+- A time estimate on every assignment (guessed from its title and description; click a card to change it), plus totals per day, per week and for the "Due in the next…" list
 - Check-offs for finished work (tap the circle on a card; saved in your browser)
 
 No accounts or API tokens needed.

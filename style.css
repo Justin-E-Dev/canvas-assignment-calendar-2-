@@ -228,6 +228,17 @@ a.btn { text-decoration: none; display: inline-block; }
 .task-title { font-weight: 700; font-size: 0.9rem; line-height: 1.25; overflow-wrap: anywhere; }
 .task-meta { font-size: 0.75rem; opacity: 0.9; margin-top: 3px; }
 
+.time-pill {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+}
+.day-load { font-size: 0.75rem; font-weight: 700; color: var(--accent); padding: 0 4px; margin-top: -4px; }
+
 /* ---------- Lower panels ---------- */
 .lower {
   display: grid;
@@ -244,6 +255,8 @@ a.btn { text-decoration: none; display: inline-block; }
 .panel h2 { font-size: 1.4rem; font-weight: 800; margin: 0 0 14px; letter-spacing: -0.02em; }
 
 .upcoming-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.range-total { margin: -6px 0 14px; font-weight: 700; color: var(--muted); }
+.range-total:empty { display: none; }
 .upcoming-head h2 { margin: 0; }
 .upcoming-head select {
   font-family: "Bricolage Grotesque", sans-serif;
@@ -311,6 +324,24 @@ a.btn { text-decoration: none; display: inline-block; }
 }
 .modal-card h3 { margin: 0 30px 6px 0; font-size: 1.5rem; font-weight: 800; }
 .modal-card .meta { color: var(--muted); font-size: 0.92rem; margin-bottom: 14px; }
+.estimate {
+  background: color-mix(in srgb, var(--c, var(--accent)) 10%, var(--card));
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+.estimate label { display: block; font-weight: 700; font-size: 0.85rem; margin-bottom: 6px; }
+.estimate select {
+  font: inherit;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 2px solid var(--c, var(--accent));
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+}
+.est-why { margin: 8px 0 0; font-size: 0.82rem; color: var(--muted); }
 .modal-card .desc { font-size: 0.95rem; line-height: 1.55; white-space: pre-line; }
 .modal-card .actions { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
 .close {
