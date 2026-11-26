@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Book Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"></span>
+      <h1>My Assignment Board</h1>
+    </div>
+    <div class="topbar-actions">
+      <a class="btn btn-ghost" href="index.html#learn">&larr; Learning Center</a>
+    </div>
+  </header>
+
+  <main id="bookPage" class="book-page">
+    <p id="missing" class="panel hidden">This book isn't in your Learning Center anymore. <a href="index.html#learn">Go back</a> and add it again.</p>
+
+    <section id="bookHero" class="book-hero hidden">
+      <div id="heroCover" class="hero-cover"></div>
+      <div class="hero-info">
+        <p id="heroCourse" class="eyebrow"></p>
+        <h2 id="heroTitle"></h2>
+        <p id="heroAuthors" class="hero-authors"></p>
+        <p id="heroMeta" class="hero-meta"></p>
+      </div>
+    </section>
+
+    <div id="dash" class="dash hidden">
+      <section class="panel notes-panel">
+        <div class="panel-head">
+          <div>
+            <h2>Chapter Notes</h2>
+            <p class="panel-sub">Pick a chapter to get a quick summary of its most important ideas.</p>
+          </div>
+        </div>
+
+        <div class="chapter-picker">
+          <label for="chapterSelect">Chapter</label>
+          <div class="picker-row">
+            <select id="chapterSelect" disabled><option>Loading chapters…</option></select>
+            <button id="notesBtn" class="btn" disabled>Get notes</button>
+          </div>
+          <p id="chapterNote" class="picker-note"></p>
+          <details id="manualBox" class="manual">
+            <summary>Type in a chapter instead</summary>
+            <form id="manualForm" class="manual-form">
+              <input id="manualNum" placeholder="Chapter # (e.g. 4)" aria-label="Chapter number">
+              <input id="manualTitle" placeholder="Chapter title (optional)" aria-label="Chapter title">
+              <button class="btn" type="submit">Get notes</button>
+            </form>
+          </details>
+        </div>
+
+        <div id="notes" class="notes"></div>
+      </section>
+
+      <aside class="panel side-panel">
+        <h2>Your notes</h2>
+        <ul id="savedList" class="saved-list"></ul>
+        <h2>About this book</h2>
+        <dl id="aboutList" class="about-list"></dl>
+      </aside>
+    </div>
+  </main>
+
+  <script src="book.js"></script>
+</body>
+</html>

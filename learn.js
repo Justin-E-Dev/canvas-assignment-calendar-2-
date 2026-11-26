@@ -133,7 +133,16 @@ const LearningCenter = (() => {
     }
     shelf.innerHTML = list.map((b) => bookTile(b, "Remove", "btn-ghost")).join("");
     shelf.querySelectorAll(".book").forEach((el, i) => {
-      el.querySelector("button").onclick = () => {
+      // "Open" goes to the book's dashboard page.
+      const b = list[i];
+      const url = `book.html?${new URLSearchParams({ course, book: b.isbn || b.title, c: courseColors[course] || "" })}`;
+      const open = Object.assign(document.createElement("a"), { className: "btn btn-small book-open", href: url, textContent: "Open" });
+      const actions = document.createElement("div");
+      actions.className = "book-actions";
+      const remove = el.querySelector("button");
+      remove.replaceWith(actions);
+      actions.append(open, remove);
+      remove.onclick = () => {
         books[course].splice(i, 1);
         if (!books[course].length) delete books[course];
         saveBooks();
@@ -187,7 +196,9 @@ const LearningCenter = (() => {
     }
   }
 
+  let courseColors = {};
   function render(courses, colors) {
+    courseColors = colors;
     const list = document.getElementById("classList");
     list.innerHTML = "";
     if (!courses.length) {
