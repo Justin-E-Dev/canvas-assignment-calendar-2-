@@ -1,0 +1,14 @@
+# Private calendar files (your feed can contain personal info)
+*.ics
+
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.vscode/

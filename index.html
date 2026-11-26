@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Canvas Assignment Calendar</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Canvas Assignment Calendar</h1>
+    <div class="topbar-actions">
+      <button id="refreshBtn" class="btn" title="Reload from your saved feed link">Refresh</button>
+      <button id="settingsBtn" class="btn btn-ghost">Settings</button>
+    </div>
+  </header>
+
+  <section id="setup" class="setup hidden">
+    <h2>Connect your Canvas calendar</h2>
+    <ol>
+      <li>In Canvas, open <strong>Calendar</strong> and click <strong>Calendar Feed</strong> (bottom right).</li>
+      <li>Copy the link (it ends in <code>.ics</code>).</li>
+      <li>Paste it below, <em>or</em> open that link in your browser to download the <code>.ics</code> file and load the file instead.</li>
+    </ol>
+    <label for="feedUrl">Feed link</label>
+    <div class="row">
+      <input id="feedUrl" type="url" placeholder="https://yourschool.instructure.com/feeds/calendars/user_....ics">
+      <button id="loadUrlBtn" class="btn">Load</button>
+    </div>
+    <div class="or">or</div>
+    <label class="btn btn-ghost file-btn">
+      Load .ics file
+      <input id="fileInput" type="file" accept=".ics,text/calendar" hidden>
+    </label>
+    <p class="note">Your feed link is saved only in this browser. It's private, so don't paste it into your code or share it.</p>
+    <p id="setupMsg" class="msg"></p>
+  </section>
+
+  <main id="app" class="layout hidden">
+    <section class="calendar">
+      <div class="cal-nav">
+        <button id="prevBtn" class="btn btn-ghost" aria-label="Previous month">&lsaquo;</button>
+        <h2 id="monthLabel"></h2>
+        <button id="nextBtn" class="btn btn-ghost" aria-label="Next month">&rsaquo;</button>
+        <button id="todayBtn" class="btn btn-ghost">Today</button>
+      </div>
+      <div class="weekdays">
+        <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+      </div>
+      <div id="grid" class="grid"></div>
+    </section>
+
+    <aside class="sidebar">
+      <h2>Due in the next 7 days</h2>
+      <ul id="upcoming" class="upcoming"></ul>
+      <h2>Courses</h2>
+      <ul id="courses" class="courses"></ul>
+      <label class="toggle"><input id="hideDone" type="checkbox"> Hide completed</label>
+      <p id="status" class="status"></p>
+    </aside>
+  </main>
+
+  <div id="detail" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <button id="closeDetail" class="close" aria-label="Close">&times;</button>
+      <div id="detailBody"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
