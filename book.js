@@ -35,13 +35,6 @@
     return;
   }
 
-  const storeKey = `${course}::${bookId}`;
-  const chapterStore = load("cac.chapters", {}); // { storeKey: { chapters, note, source } }
-  const notesStore = load("cac.notes", {}); //       { storeKey: { chapterKey: notes } }
-  const myNotes = () => (notesStore[storeKey] ||= {});
-  const chapterKey = (ch) => `${ch.number}|${ch.title}`.toLowerCase();
-  const chapterLabel = (ch) => [ch.number && `Chapter ${ch.number}`, ch.title].filter(Boolean).join(": ");
-
   // ---------- Header ----------
   document.title = `${book.title} – Book Dashboard`;
   $("heroCourse").textContent = course;
@@ -69,99 +62,112 @@
   $("bookHero").classList.remove("hidden");
   $("dash").classList.remove("hidden");
 
-  // ---------- Asking Claude through your own (free) Claude.ai chat ----------
-  // The page writes the request, you send it in Claude.ai, then paste the answer back here.
-  const bookDescription = () =>
-    [
+  // ---------- Book notes (one set of notes for the whole book) ----------
+  // { coverage, coverageNote, chapters: [{ number, title, overview, sections: [{ number, title, summary }], terms: [{ term, definition }] }], savedAt }
+  const storeKey = `${course}::${bookId}`;
+  const notesStore = load("cac.bookNotes", {});
+
+  // ---------- The request sent to Claude ----------
+  function notesPrompt() {
+    const details = [
       `Title: ${book.title}`,
       (book.authors || []).length && `Author(s): ${book.authors.join(", ")}`,
       book.year && `Year: ${book.year}`,
       book.isbn && `ISBN: ${book.isbn}`,
-      `I'm using it for my class: ${course}`,
+      `My class: ${course}`,
     ].filter(Boolean).join("\n");
 
-  function notesPrompt(ch) {
-    return `I'm a college student studying from this textbook:
-${bookDescription()}
-
-Please write quick-review study notes for ${chapterLabel(ch)}, covering its most important concepts. Explain ideas in plain language, in your own words. If you're not sure what this exact chapter covers in this edition, base the notes on what it most likely covers and say so in "caveat".
-
-Reply with ONLY a JSON code block in exactly this format (no other text):
-\`\`\`json
-{
-  "chapter_title": "the chapter's title",
-  "overview": "2-4 sentences: what the chapter is about and why it matters",
-  "key_concepts": [{ "name": "concept", "explanation": "2-4 plain sentences, with a quick example where it helps" }],
-  "key_terms": [{ "term": "word", "definition": "short definition" }],
-  "takeaways": ["one-line thing to remember for a test"],
-  "confidence": "high, medium or low: how sure you are this matches this book's actual chapter",
-  "caveat": "empty if confidence is high, otherwise one sentence on what may not match"
-}
-\`\`\`
-Include 4-8 key concepts (most important first), 5-12 key terms and 3-5 takeaways.`;
-  }
-
-  function chaptersPrompt() {
     return `I'm a college student using this textbook:
-${bookDescription()}
+${details}
 
-Please list its chapters in order (main chapters only, not sections), one per line, in exactly this format and nothing else:
-1: Chapter title
-2: Chapter title
+Please search the web for this book's table of contents and for what each chapter covers (publisher pages, previews, course syllabi, study guides). Then write study notes for the WHOLE book: every chapter, and the main sections inside each chapter, summarizing roughly what each one covers. Use your own words; it's fine if it isn't perfectly accurate. If you can't find much about this specific book, say so on the COVERAGE lines, then still write your best version based on what a book like this usually covers.
 
-If several editions exist, use the one matching the year/ISBN. If you don't know this specific book, say so instead of guessing.`;
+Reply in plain text using exactly this format (no code block, no other text):
+
+COVERAGE: good, partial or limited
+COVERAGE NOTE: one or two sentences on what you found online and how accurate these notes are likely to be
+
+## Chapter 1: Chapter title
+OVERVIEW: 2-3 sentences on what the chapter is about
+### 1.1 Section title
+2-4 sentences summarizing the section.
+### 1.2 Section title
+2-4 sentences summarizing the section.
+KEY TERMS: term - short definition; term - short definition; term - short definition
+
+## Chapter 2: Chapter title
+(and so on for every chapter)
+
+If you run out of room, stop at the end of a chapter and write "CONTINUE" on the last line; I'll ask you to keep going.`;
   }
 
-  // Shows the two steps (send the request in Claude.ai, paste the answer back) in a box.
-  // onAnswer(text) returns an error message, or "" when the answer was used.
-  function askInClaude(box, { heading, prompt, pasteLabel, onAnswer }) {
-    const url = `https://claude.ai/new?q=${encodeURIComponent(prompt)}`;
-    box.innerHTML = `
-      <div class="ask">
-        <p class="ask-heading">${esc(heading)}</p>
-        <ol class="ask-steps">
-          <li>
-            <strong>Ask Claude.</strong> This copies the request and opens Claude.ai in a new tab (free with your Claude account).
-            If the message box there is empty, paste it in (Ctrl+V, or ⌘V on a Mac) and send it.
-            <div class="ask-row">
-              <button class="btn ask-open" type="button">Copy &amp; open Claude</button>
-              <button class="link-btn ask-show" type="button">Show the request</button>
-            </div>
-            <textarea class="ask-prompt hidden" readonly rows="8"></textarea>
-          </li>
-          <li>
-            <strong>Paste the answer here.</strong> When Claude finishes, use the copy button under its reply (or on the code box), then paste it below.
-            <textarea class="ask-answer" rows="6" placeholder="${esc(pasteLabel)}"></textarea>
-            <div class="ask-row">
-              <button class="btn ask-save" type="button">Save</button>
-              <button class="link-btn ask-cancel" type="button">Cancel</button>
-            </div>
-            <p class="ask-msg"></p>
-          </li>
-        </ol>
-      </div>`;
-    const q = (sel) => box.querySelector(sel);
-    q(".ask-prompt").value = prompt;
-    q(".ask-open").onclick = () => {
-      window.open(url, "_blank", "noopener");
-      copyText(prompt, q(".ask-prompt"));
-      q(".ask-open").textContent = "Copied! Open Claude again";
-    };
-    q(".ask-show").onclick = () => q(".ask-prompt").classList.toggle("hidden");
-    q(".ask-cancel").onclick = () => (box.innerHTML = "");
-    q(".ask-save").onclick = () => {
-      const text = q(".ask-answer").value.trim();
-      const msg = q(".ask-msg");
-      if (!text) {
-        msg.textContent = "Paste Claude's answer in the box first.";
-        return;
+  // ---------- Reading Claude's answer ----------
+  const clean = (s) => s.replace(/\*\*|__/g, "").replace(/^[\s>*•-]+/, "").trim();
+
+  function splitTerm(t) {
+    const m = t.match(/^(.+?)\s+[-–—:]\s+(.+)$/) || t.match(/^(.+?):\s*(.+)$/);
+    return m ? { term: m[1].trim(), definition: m[2].trim() } : { term: t.trim(), definition: "" };
+  }
+
+  function parseBookNotes(text) {
+    const out = { coverage: "", coverageNote: "", chapters: [] };
+    let chapter = null, section = null;
+    for (const raw of text.replace(/\r/g, "").split("\n")) {
+      const line = raw.trim();
+      if (!line || /^`{3}/.test(line) || /^CONTINUE\.?$/i.test(clean(line))) continue;
+      const plain = clean(line.replace(/^#+\s*/, ""));
+      let m;
+
+      if ((m = plain.match(/^COVERAGE NOTE:\s*(.*)$/i))) { out.coverageNote = m[1]; continue; }
+      if ((m = plain.match(/^COVERAGE:\s*(\w+)/i))) { out.coverage = m[1].toLowerCase(); continue; }
+
+      // "## Chapter 3: Title" (also "Chapter 3 - Title", "Part II: Title")
+      if (/^##(?!#)/.test(line) || /^(chapter|part|unit)\s+[\w.]+\s*[:.\-–—]/i.test(plain)) {
+        m = plain.match(/^(?:(?:chapter|part|unit)\s+(\w+)|([0-9]{1,3}))\s*[:.\-–—]?\s*(.*)$/i);
+        chapter = {
+          number: (m && (m[1] || m[2])) || String(out.chapters.length + 1),
+          title: (m && m[3]) || plain,
+          overview: "", sections: [], terms: [],
+        };
+        out.chapters.push(chapter);
+        section = null;
+        continue;
       }
-      const error = onAnswer(text);
-      msg.textContent = error || "";
-    };
+      if (!chapter) continue; // text before the first chapter (greetings etc.)
+
+      // "### 3.2 Title"
+      if (/^###/.test(line)) {
+        m = plain.match(/^([0-9]+(?:\.[0-9]+)*)\s*[:.\-–—]?\s*(.*)$/);
+        section = { number: m ? m[1] : "", title: m ? m[2] || m[1] : plain, summary: "" };
+        chapter.sections.push(section);
+        continue;
+      }
+      if ((m = plain.match(/^OVERVIEW:\s*(.*)$/i))) { chapter.overview = m[1]; section = null; continue; }
+      if ((m = plain.match(/^KEY TERMS?:\s*(.*)$/i))) {
+        chapter.terms.push(...m[1].split(/;\s*/).filter((t) => t.trim()).map(splitTerm));
+        section = null;
+        continue;
+      }
+      // Any other text belongs to the current section, or else the chapter overview.
+      if (section) section.summary += (section.summary ? " " : "") + plain;
+      else chapter.overview += (chapter.overview ? " " : "") + plain;
+    }
+    if (!["good", "partial", "limited"].includes(out.coverage)) out.coverage = "";
+    return out.chapters.length ? out : null;
   }
 
-  // Copy to the clipboard; older or locked-down browsers get the select-and-copy fallback.
+  // Adding a "continue" answer: chapters with the same number are replaced, new ones are added.
+  function mergeNotes(old, add) {
+    const chapters = [...old.chapters];
+    for (const ch of add.chapters) {
+      const i = chapters.findIndex((c) => c.number.toLowerCase() === ch.number.toLowerCase());
+      if (i >= 0) chapters[i] = ch;
+      else chapters.push(ch);
+    }
+    return { ...old, chapters, coverage: add.coverage || old.coverage, coverageNote: add.coverageNote || old.coverageNote };
+  }
+
+  // ---------- Copy helper ----------
   function copyText(text, textarea) {
     const fallback = () => {
       const wasHidden = textarea.classList.contains("hidden");
@@ -178,222 +184,124 @@ If several editions exist, use the one matching the year/ISBN. If you don't know
     else fallback();
   }
 
-  // Pull the notes out of whatever was pasted (a JSON code block, or JSON with extra text around it).
-  function parseNotes(text) {
-    const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-    let body = fenced ? fenced[1] : text;
-    const start = body.indexOf("{"), end = body.lastIndexOf("}");
-    if (start < 0 || end <= start) return null;
-    let n;
-    try {
-      n = JSON.parse(body.slice(start, end + 1));
-    } catch {
-      return null;
-    }
-    const str = (v) => (typeof v === "string" ? v : "");
-    const list = (v) => (Array.isArray(v) ? v : []);
-    const notes = {
-      chapter_title: str(n.chapter_title),
-      overview: str(n.overview),
-      key_concepts: list(n.key_concepts).filter((k) => k && (k.name || k.explanation)).map((k) => ({ name: str(k.name), explanation: str(k.explanation) })),
-      key_terms: list(n.key_terms).filter((t) => t && t.term).map((t) => ({ term: str(t.term), definition: str(t.definition) })),
-      takeaways: list(n.takeaways).map(str).filter(Boolean),
-      confidence: ["high", "medium", "low"].includes(n.confidence) ? n.confidence : "",
-      caveat: str(n.caveat),
-    };
-    return notes.overview || notes.key_concepts.length ? notes : null;
-  }
-
-  // "1: Title", "Chapter 1. Title", "1) Title", "- 1 – Title" ...
-  function parseChapterLines(text) {
-    const out = [];
-    for (const raw of text.replace(/```[a-z]*/gi, "").split("\n")) {
-      const m = raw.replace(/^[\s*•-]+/, "").replace(/\*\*/g, "").match(/^(?:chapter\s+)?([0-9]{1,3}|[ivxlc]{1,6}|[A-Z])\s*[:.)\-–—]\s*(.+)$/i);
-      if (m && m[2].trim()) out.push({ number: m[1], title: m[2].trim() });
-    }
-    return out;
-  }
-
-  // ---------- Chapter list ----------
-  let chapters = [];
-
-  // Open Library sometimes has the table of contents for an exact edition.
-  async function openLibraryChapters() {
-    if (!book.isbn) return [];
-    try {
-      const res = await fetch(`https://openlibrary.org/isbn/${encodeURIComponent(book.isbn)}.json`);
-      if (!res.ok) return [];
-      const toc = (await res.json()).table_of_contents || [];
-      const top = toc.filter((t) => t.title && !(t.level > 0));
-      const list = (top.length >= 3 ? top : toc.filter((t) => t.title)).map((t, i) => ({
-        number: String(t.label || "").replace(/^chapter\s*/i, "").trim() || String(i + 1),
-        title: String(t.title).trim(),
-      }));
-      return list.length >= 3 ? list : [];
-    } catch {
-      return [];
-    }
-  }
-
-  function fillChapterSelect(note) {
-    const sel = $("chapterSelect");
-    if (!chapters.length) {
-      sel.innerHTML = `<option value="">No chapter list yet</option>`;
-      sel.disabled = true;
-      $("notesBtn").disabled = true;
-      $("manualBox").open = true;
-    } else {
-      sel.innerHTML =
-        `<option value="">Choose a chapter…</option>` +
-        chapters.map((ch, i) => `<option value="${i}">${esc(chapterLabel(ch))}${myNotes()[chapterKey(ch)] ? " ✓" : ""}</option>`).join("");
-      sel.disabled = false;
-    }
-    $("chapterNote").innerHTML = esc(note || "") +
-      ` <button class="link-btn" id="askChaptersBtn" type="button">${chapters.length ? "Get a different chapter list from Claude" : "Get the chapter list from Claude"}</button>`;
-    $("askChaptersBtn").onclick = askForChapters;
-  }
-
-  function askForChapters() {
-    askInClaude($("chapterHelp"), {
-      heading: "Get this book's chapter list",
-      prompt: chaptersPrompt(),
-      pasteLabel: "Paste the chapter list here, e.g.\n1: Introduction\n2: …",
-      onAnswer(text) {
-        const list = parseChapterLines(text);
-        if (list.length < 2) return "Couldn't find a chapter list in that. It should have one chapter per line, like \"1: Title\".";
-        chapters = list;
-        const note = "Chapter list from Claude. It may not match your edition exactly.";
-        chapterStore[storeKey] = { chapters, note };
-        save("cac.chapters", chapterStore);
-        $("chapterHelp").innerHTML = "";
-        fillChapterSelect(note);
-        return "";
-      },
-    });
-    $("chapterHelp").scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }
-
-  async function loadChapters() {
-    const cached = chapterStore[storeKey];
-    if (cached) {
-      chapters = cached.chapters;
-      return fillChapterSelect(cached.note);
-    }
-    $("chapterSelect").innerHTML = `<option>Loading chapters…</option>`;
-    $("chapterSelect").disabled = true;
-    const list = await openLibraryChapters();
-    chapters = list;
-    if (list.length) {
-      const note = "Chapter list from Open Library for this edition.";
-      chapterStore[storeKey] = { chapters: list, note };
-      save("cac.chapters", chapterStore);
-      fillChapterSelect(note);
-    } else {
-      fillChapterSelect("No chapter list found online. Type a chapter in below, or");
-    }
-  }
-
-  $("chapterSelect").onchange = () => {
-    const ch = chapters[$("chapterSelect").value];
-    $("notesBtn").disabled = !ch;
-    if (!ch) return;
-    const saved = myNotes()[chapterKey(ch)];
-    $("notesBtn").textContent = saved ? "Show notes" : "Get notes";
-    if (saved) showNotes(ch, saved);
-  };
-  $("notesBtn").onclick = () => {
-    const ch = chapters[$("chapterSelect").value];
-    if (ch) getNotes(ch);
-  };
-  $("manualForm").onsubmit = (ev) => {
-    ev.preventDefault();
-    let ch = { number: $("manualNum").value.trim(), title: $("manualTitle").value.trim() };
-    if (!ch.number && !ch.title) return $("manualNum").focus();
-    // A number that's already in the chapter list (with no title typed) means that chapter.
-    const listed = !ch.title && chapters.find((c) => c.number.toLowerCase() === ch.number.toLowerCase());
-    if (listed) ch = listed;
-    getNotes(ch);
-  };
-
-  // ---------- Notes ----------
-  function getNotes(ch, rewrite) {
-    const saved = myNotes()[chapterKey(ch)];
-    if (saved && !rewrite) return showNotes(ch, saved);
-
-    askInClaude($("notes"), {
-      heading: `Notes for ${chapterLabel(ch)}`,
-      prompt: notesPrompt(ch),
-      pasteLabel: "Paste Claude's answer here (the part starting with { … })",
-      onAnswer(text) {
-        const notes = parseNotes(text);
-        if (!notes) return "That doesn't look like the notes. Make sure you copied Claude's whole answer, including the { and } at the start and end.";
-        notes.savedAt = new Date().toISOString();
-        myNotes()[chapterKey(ch)] = { ...notes, chapter: ch };
-        save("cac.notes", notesStore);
-        showNotes(ch, myNotes()[chapterKey(ch)]);
-        renderSaved();
-        fillChapterSelect(chapterStore[storeKey] ? chapterStore[storeKey].note : "");
-        const i = chapters.findIndex((c) => chapterKey(c) === chapterKey(ch));
-        if (i >= 0) $("chapterSelect").value = String(i);
-        return "";
-      },
-    });
-  }
-
-  function showNotes(ch, n) {
-    const confidence = { high: "Strong match", medium: "Likely match", low: "Rough guess" }[n.confidence] || "";
-    $("notes").innerHTML = `
-      <article class="notes-card">
-        <header class="notes-head">
-          <div>
-            <p class="eyebrow">${esc(ch.number ? `Chapter ${ch.number}` : "Chapter")}</p>
-            <h3>${esc(n.chapter_title || ch.title || "")}</h3>
-          </div>
-          ${confidence ? `<span class="conf conf-${esc(n.confidence)}">${confidence}</span>` : ""}
-        </header>
-        ${n.caveat ? `<p class="caveat">${esc(n.caveat)}</p>` : ""}
-        <p class="overview">${esc(n.overview)}</p>
-
-        <h4>Key concepts</h4>
-        <ol class="concepts">
-          ${(n.key_concepts || []).map((k) => `<li><strong>${esc(k.name)}</strong><p>${esc(k.explanation)}</p></li>`).join("")}
+  // ---------- The "ask Claude" box ----------
+  // mode "new": replace any notes; mode "more": add chapters to the saved notes.
+  function showAsk(mode) {
+    const prompt = mode === "more"
+      ? "Please continue the notes from where you stopped, in exactly the same format (start with the next chapter's ## line)."
+      : notesPrompt();
+    const box = $("ask");
+    box.innerHTML = `
+      <div class="ask">
+        <p class="ask-heading">${mode === "more" ? "Add more chapters" : "Get notes for this book"}</p>
+        <ol class="ask-steps">
+          <li>
+            <strong>Ask Claude.</strong> ${mode === "more"
+              ? "Go back to the same Claude chat and send this (it's copied for you):"
+              : "This copies the request and opens Claude.ai in a new tab. Claude will search the web, then write notes for every chapter. If the message box is empty, paste (Ctrl+V, or ⌘V on a Mac) and send it."}
+            <div class="ask-row">
+              <button class="btn ask-open" type="button">${mode === "more" ? "Copy the request" : "Copy &amp; open Claude"}</button>
+              <button class="link-btn ask-show" type="button">Show the request</button>
+            </div>
+            <textarea class="ask-prompt hidden" readonly rows="8"></textarea>
+          </li>
+          <li>
+            <strong>Paste the answer here.</strong> When Claude finishes, click the copy button under its reply and paste it below.
+            If Claude ended with "CONTINUE", save this part, then use <em>Add more chapters</em> for the rest.
+            <textarea class="ask-answer" rows="7" placeholder="Paste Claude's whole answer here"></textarea>
+            <div class="ask-row">
+              <button class="btn ask-save" type="button">Save notes</button>
+              <button class="link-btn ask-cancel" type="button">Cancel</button>
+            </div>
+            <p class="ask-msg"></p>
+          </li>
         </ol>
-
-        ${(n.key_terms || []).length ? `<h4>Key terms</h4>
-        <dl class="terms">
-          ${n.key_terms.map((t) => `<div><dt>${esc(t.term)}</dt><dd>${esc(t.definition)}</dd></div>`).join("")}
-        </dl>` : ""}
-
-        ${(n.takeaways || []).length ? `<h4>Remember for the test</h4>
-        <ul class="takeaways">${n.takeaways.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}
-
-        <footer class="notes-foot">
-          <span>Written by Claude from its general knowledge of this book, not your copy. Check anything important against your textbook.</span>
-          <button class="link-btn" id="rewriteBtn">Get new notes</button>
-        </footer>
-      </article>`;
-    $("rewriteBtn").onclick = () => getNotes(ch, true);
+      </div>`;
+    const q = (sel) => box.querySelector(sel);
+    q(".ask-prompt").value = prompt;
+    q(".ask-open").onclick = () => {
+      if (mode !== "more") window.open(`https://claude.ai/new?q=${encodeURIComponent(prompt)}`, "_blank", "noopener");
+      copyText(prompt, q(".ask-prompt"));
+      q(".ask-open").textContent = mode === "more" ? "Copied!" : "Copied! Open Claude again";
+    };
+    q(".ask-show").onclick = () => q(".ask-prompt").classList.toggle("hidden");
+    q(".ask-cancel").onclick = () => {
+      box.innerHTML = "";
+      render();
+    };
+    q(".ask-save").onclick = () => {
+      const text = q(".ask-answer").value.trim();
+      if (!text) return (q(".ask-msg").textContent = "Paste Claude's answer in the box first.");
+      const parsed = parseBookNotes(text);
+      if (!parsed) {
+        q(".ask-msg").textContent = "Couldn't find any chapters in that. Make sure you copied Claude's whole answer (it should have lines starting with \"## Chapter\").";
+        return;
+      }
+      const old = notesStore[storeKey];
+      notesStore[storeKey] = { ...(mode === "more" && old ? mergeNotes(old, parsed) : parsed), savedAt: new Date().toISOString() };
+      save("cac.bookNotes", notesStore);
+      box.innerHTML = "";
+      render();
+    };
+    $("notes").classList.toggle("hidden", mode !== "more");
+    box.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
-  function renderSaved() {
-    const entries = Object.values(myNotes());
-    $("savedList").innerHTML = entries.length
-      ? entries
-          .sort((a, b) => String(a.chapter.number).localeCompare(String(b.chapter.number), undefined, { numeric: true }))
-          .map((n, i) => `<li><button class="saved-btn" data-i="${i}">${esc(chapterLabel(n.chapter))}</button></li>`)
-          .join("")
-      : `<li class="muted">Notes you get will be saved here.</li>`;
-    $("savedList").querySelectorAll(".saved-btn").forEach((btn) => {
-      const n = entries[btn.dataset.i];
-      btn.onclick = () => {
-        showNotes(n.chapter, n);
-        const i = chapters.findIndex((c) => chapterKey(c) === chapterKey(n.chapter));
-        $("chapterSelect").value = i >= 0 ? String(i) : "";
-        $("notes").scrollIntoView({ behavior: "smooth", block: "start" });
-      };
-    });
+  // ---------- Showing the notes ----------
+  const COVERAGE = {
+    good: ["Good coverage", "Claude found solid information about this book."],
+    partial: ["Partial coverage", "Some of this is based on what Claude found, some is its best guess."],
+    limited: ["Limited coverage", "Claude couldn't find much about this exact book, so most of this is its best guess."],
+  };
+
+  function render() {
+    const n = notesStore[storeKey];
+    const has = n && n.chapters && n.chapters.length;
+    $("notesTools").classList.toggle("hidden", !has);
+    $("notes").classList.remove("hidden");
+    $("tocPanel").classList.toggle("hidden", !has);
+
+    if (!has) {
+      $("notes").innerHTML = `<div class="empty-notes">
+          <p>No notes for this book yet. Claude will look the book up online and summarize every chapter and section for you to scroll through.</p>
+          <button class="btn" id="startBtn" type="button">Get notes for this book</button>
+        </div>`;
+      $("startBtn").onclick = () => showAsk("new");
+      $("toc").innerHTML = "";
+      return;
+    }
+
+    const [label, fallbackNote] = COVERAGE[n.coverage] || ["", ""];
+    const note = n.coverageNote || fallbackNote;
+    const chapterId = (i) => `ch-${i + 1}`;
+    $("notes").innerHTML = `
+      ${label || note ? `<div class="coverage coverage-${esc(n.coverage || "none")}">
+        ${label ? `<strong>${esc(label)}</strong>` : ""}${note ? `<span>${esc(note)}</span>` : ""}
+      </div>` : ""}
+      ${n.chapters.map((ch, i) => `
+        <article class="chapter" id="${chapterId(i)}">
+          <header>
+            <span class="chapter-num">${esc(ch.number)}</span>
+            <h3>${esc(ch.title)}</h3>
+          </header>
+          ${ch.overview ? `<p class="overview">${esc(ch.overview)}</p>` : ""}
+          ${ch.sections.length ? `<div class="sections">${ch.sections.map((s) => `
+            <section class="section">
+              <h4>${s.number ? `<span>${esc(s.number)}</span>` : ""}${esc(s.title)}</h4>
+              ${s.summary ? `<p>${esc(s.summary)}</p>` : ""}
+            </section>`).join("")}</div>` : ""}
+          ${ch.terms.length ? `<p class="terms-label">Key terms</p>
+          <dl class="terms">${ch.terms.map((t) => `<div><dt>${esc(t.term)}</dt>${t.definition ? `<dd>${esc(t.definition)}</dd>` : ""}</div>`).join("")}</dl>` : ""}
+        </article>`).join("")}
+      <p class="notes-foot">Written by Claude from what it found online and its general knowledge, not from your copy of the book. Check anything important against your textbook.</p>`;
+
+    $("toc").innerHTML = n.chapters
+      .map((ch, i) => `<li><a href="#${chapterId(i)}"><span>${esc(ch.number)}</span>${esc(ch.title)}</a></li>`)
+      .join("");
+    $("savedInfo").textContent = `${n.chapters.length} chapters · saved ${new Date(n.savedAt).toLocaleDateString()}`;
   }
 
-  renderSaved();
-  loadChapters();
+  $("moreBtn").onclick = () => showAsk("more");
+  $("redoBtn").onclick = () => showAsk("new");
+  render();
 })();

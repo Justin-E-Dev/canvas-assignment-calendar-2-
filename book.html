@@ -37,37 +37,28 @@
       <section class="panel notes-panel">
         <div class="panel-head">
           <div>
-            <h2>Chapter Notes</h2>
-            <p class="panel-sub">Pick a chapter to get a quick summary of its most important ideas, written by Claude in your own free Claude.ai chat.</p>
+            <h2>Book Notes</h2>
+            <p class="panel-sub">Summaries of every chapter and section, written by Claude from what it can find online.</p>
+          </div>
+          <div id="notesTools" class="notes-tools hidden">
+            <button id="moreBtn" class="link-btn" type="button">Add more chapters</button>
+            <button id="redoBtn" class="link-btn" type="button">Get new notes</button>
           </div>
         </div>
-
-        <div class="chapter-picker">
-          <label for="chapterSelect">Chapter</label>
-          <div class="picker-row">
-            <select id="chapterSelect" disabled><option>Loading chapters…</option></select>
-            <button id="notesBtn" class="btn" disabled>Get notes</button>
-          </div>
-          <p id="chapterNote" class="picker-note"></p>
-          <div id="chapterHelp"></div>
-          <details id="manualBox" class="manual">
-            <summary>Type in a chapter instead</summary>
-            <form id="manualForm" class="manual-form">
-              <input id="manualNum" placeholder="Chapter # (e.g. 4)" aria-label="Chapter number">
-              <input id="manualTitle" placeholder="Chapter title (optional)" aria-label="Chapter title">
-              <button class="btn" type="submit">Get notes</button>
-            </form>
-          </details>
-        </div>
-
+        <div id="ask"></div>
         <div id="notes" class="notes"></div>
       </section>
 
-      <aside class="panel side-panel">
-        <h2>Your notes</h2>
-        <ul id="savedList" class="saved-list"></ul>
-        <h2>About this book</h2>
-        <dl id="aboutList" class="about-list"></dl>
+      <aside class="side-col">
+        <nav id="tocPanel" class="panel toc-panel hidden" aria-label="Chapters">
+          <h2>Chapters</h2>
+          <p id="savedInfo" class="saved-info"></p>
+          <ol id="toc" class="toc"></ol>
+        </nav>
+        <section class="panel side-panel">
+          <h2>About this book</h2>
+          <dl id="aboutList" class="about-list"></dl>
+        </section>
       </aside>
     </div>
   </main>

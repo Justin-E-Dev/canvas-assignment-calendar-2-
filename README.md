@@ -7,7 +7,7 @@ A bold, colorful assignment board built from your Canvas calendar feed. It shows
 - A "Due in the next…" list you can set to 1 week, 2 weeks, or a month
 - A time estimate on every assignment (guessed from its title and description; click a card to change it), plus totals per day, per week and for the "Due in the next…" list
 - A **Learning Center** tab with a card for every class, where you can add each class's books by ISBN or by searching (with cover previews, from Open Library or Google Books)
-- A **book dashboard** for each book (click **Open**), with **Chapter Notes**: pick a chapter and get its key concepts, terms and test takeaways, written by Claude in your free Claude.ai chat
+- A **book dashboard** for each book (click **Open**), with **Book Notes**: summaries of every chapter and section to scroll through, written by Claude in your free Claude.ai chat
 - Check-offs for finished work (tap the circle on a card; saved in your browser)
 
 No accounts or API tokens needed.
@@ -22,14 +22,15 @@ Keep the feed link private. Anyone who has it can see your calendar. The website
 
 You can also download the `.ics` file from Canvas and use **Load .ics file** instead.
 
-## How Chapter Notes work (free)
+## How Book Notes work (free)
 
-Chapter Notes are written by Claude in your own Claude.ai chat, so there's nothing to pay for or set up:
+Book Notes are written by Claude in your own Claude.ai chat, so there's nothing to pay for or set up:
 
-1. On a book's page, pick a chapter and click **Get notes**, then **Copy & open Claude**. The request is copied and Claude.ai opens in a new tab.
-2. Send it there, copy Claude's answer, and paste it back into the page. The page formats the notes and saves them in your browser.
+1. On a book's page, click **Get notes for this book**, then **Copy & open Claude**. The request is copied and Claude.ai opens in a new tab.
+2. Claude searches the web for the book's table of contents and writes a summary of every chapter and section. It says up front if it couldn't find much, and still writes its best version.
+3. Copy Claude's answer and paste it back into the page. All chapters show up to scroll through, with a chapter list to jump around, saved in your browser.
 
-If the book's chapter list isn't found online, the page can ask Claude for it the same way, or you can type a chapter in.
+If Claude stops partway (it ends with "CONTINUE"), save that part, then use **Add more chapters** for the rest.
 
 ## Hosting
 
