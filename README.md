@@ -1,11 +1,11 @@
 # Canvas Assignment Calendar
 
-A simple calendar website for your Canvas assignments. It reads your Canvas calendar feed and shows:
+A bold, colorful assignment board built from your Canvas calendar feed. It shows:
 
-- A month calendar with every assignment on its due date
+- A week board with one column per day and each assignment as a colored card
 - Each course in its own color
-- A "due in the next…" list you can set to 1 week, 2 weeks, or a month
-- Check-offs for finished work (saved in your browser)
+- A "Due in the next…" list you can set to 1 week, 2 weeks, or a month
+- Check-offs for finished work (tap the circle on a card; saved in your browser)
 
 No accounts or API tokens needed.
 

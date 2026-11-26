@@ -16,9 +16,10 @@ const RANGES = {
   "1m": { label: "month", months: 1 },
 };
 
+// Bold course colors, all dark enough for white text on top.
 const COLORS = [
-  "#2f6fde", "#d9480f", "#2b8a3e", "#ae3ec9", "#e8590c",
-  "#0c8599", "#c2255c", "#5c940d", "#6741d9", "#a61e4d",
+  "#4c4cf5", "#e0335f", "#0f8a5f", "#8a3ffc", "#d14d0f",
+  "#0a7ea4", "#b8327a", "#5a7d0a", "#c2410c", "#1f6feb",
 ];
 
 // ---------- Storage helpers (browser storage can fail, so never crash) ----------
@@ -130,9 +131,19 @@ if (typeof document !== "undefined") {
     done: new Set(load(STORE.done, [])),
     hideDone: load(STORE.hideDone, false),
     range: RANGES[load(STORE.range, "1w")] ? load(STORE.range, "1w") : "1w",
-    viewYear: new Date().getFullYear(),
-    viewMonth: new Date().getMonth(),
+    weekStart: startOfWeek(new Date()),
   };
+
+  function startOfWeek(d) {
+    const s = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    s.setDate(s.getDate() - s.getDay()); // back up to Sunday
+    return s;
+  }
+  function addDays(d, n) {
+    const r = new Date(d);
+    r.setDate(r.getDate() + n);
+    return r;
+  }
 
   // ----- Formatting -----
   const fmtDay = (d) => d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
@@ -154,41 +165,73 @@ if (typeof document !== "undefined") {
   const visible = () => state.events.filter((e) => !(state.hideDone && state.done.has(e.id)));
 
   // ----- Rendering -----
-  function renderCalendar() {
-    const first = new Date(state.viewYear, state.viewMonth, 1);
-    $("monthLabel").textContent = first.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  // An assignment card: a round check button plus the title (opens details).
+  function taskCard(e, metaText) {
+    const done = state.done.has(e.id);
+    const card = document.createElement("div");
+    card.className = "task" + (done ? " done" : "");
+    card.style.setProperty("--c", state.courseColors[e.course]);
+
+    const check = document.createElement("button");
+    check.className = "check" + (done ? " on" : "");
+    check.textContent = "✓";
+    check.setAttribute("aria-label", done ? "Mark as not done" : "Mark as done");
+    check.onclick = () => toggleDone(e.id);
+
+    const body = document.createElement("button");
+    body.className = "task-body";
+    body.innerHTML = `<div class="task-title">${escapeHtml(e.title)}</div>
+      <div class="task-meta">${escapeHtml(metaText)}</div>`;
+    body.onclick = () => showDetail(e);
+
+    card.append(check, body);
+    return card;
+  }
+
+  function renderWeek() {
+    const start = state.weekStart;
+    const end = addDays(start, 6);
+    const sameMonth = start.getMonth() === end.getMonth();
+    const startLabel = start.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    const endLabel = end.toLocaleDateString(undefined, sameMonth ? { day: "numeric" } : { month: "short", day: "numeric" });
+    $("weekLabel").textContent = `${startLabel} – ${endLabel}`;
 
     const byDay = {};
     for (const e of visible()) (byDay[dayKey(e.due)] ||= []).push(e);
 
-    const start = new Date(first);
-    start.setDate(1 - first.getDay()); // back up to Sunday
     const today = new Date();
-    const grid = $("grid");
-    grid.innerHTML = "";
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const board = $("board");
+    board.innerHTML = "";
+    let total = 0, left = 0;
 
-    for (let i = 0; i < 42; i++) {
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
-      if (i === 35 && d.getMonth() !== state.viewMonth) break; // skip a 6th row when not needed
+    for (let i = 0; i < 7; i++) {
+      const d = addDays(start, i);
+      const items = byDay[dayKey(d)] || [];
+      total += items.length;
+      left += items.filter((e) => !state.done.has(e.id)).length;
 
-      const cell = document.createElement("div");
-      cell.className = "day";
-      if (d.getMonth() !== state.viewMonth) cell.classList.add("other");
-      if (sameDay(d, today)) cell.classList.add("today");
-      cell.innerHTML = `<div class="day-num">${d.getDate()}</div>`;
+      const col = document.createElement("div");
+      col.className = "day-col";
+      if (sameDay(d, today)) col.classList.add("today");
+      else if (d < startOfToday) col.classList.add("past");
+      if (!items.length) col.classList.add("empty-day");
 
-      for (const e of byDay[dayKey(d)] || []) {
-        const chip = document.createElement("button");
-        chip.className = "chip" + (state.done.has(e.id) ? " done" : "");
-        chip.style.setProperty("--c", state.courseColors[e.course]);
-        chip.textContent = e.title;
-        chip.title = `${e.title} (${e.course}) - ${fmtTime(e)}`;
-        chip.onclick = () => showDetail(e);
-        cell.appendChild(chip);
-      }
-      grid.appendChild(cell);
+      col.innerHTML = `<div class="day-head">
+          <span class="day-name">${d.toLocaleDateString(undefined, { weekday: "short" })}</span>
+          <span class="day-num">${d.getDate()}</span>
+        </div>${sameDay(d, today) ? `<span class="today-badge">Today</span>` : ""}`;
+
+      for (const e of items) col.appendChild(taskCard(e, `${e.course} · ${fmtTime(e)}`));
+      if (!items.length) col.insertAdjacentHTML("beforeend", `<div class="day-empty">Nothing due</div>`);
+      board.appendChild(col);
     }
+
+    const isThisWeek = sameDay(start, startOfWeek(today));
+    const when = isThisWeek ? "this week" : "that week";
+    $("weekSummary").textContent = total
+      ? `${left} of ${total} left ${when}`
+      : `Nothing due ${when}`;
   }
 
   function renderUpcoming() {
@@ -209,27 +252,12 @@ if (typeof document !== "undefined") {
     const list = $("upcoming");
     list.innerHTML = "";
     if (!items.length) {
-      list.innerHTML = `<li class="empty">Nothing due in the next ${range.label}.</li>`;
+      list.innerHTML = `<li class="empty">Nothing due in the next ${range.label}. Nice!</li>`;
       return;
     }
     for (const e of items) {
       const li = document.createElement("li");
-      if (state.done.has(e.id)) li.classList.add("done");
-
-      const box = document.createElement("input");
-      box.type = "checkbox";
-      box.checked = state.done.has(e.id);
-      box.title = "Mark as done";
-      box.onchange = () => toggleDone(e.id);
-
-      const info = document.createElement("div");
-      info.className = "info";
-      info.innerHTML = `
-        <div class="title"><span class="dot" style="--c:${state.courseColors[e.course]}"></span>${escapeHtml(e.title)}</div>
-        <div class="meta">${escapeHtml(e.course)} &middot; ${fmtDay(e.due)}, ${fmtTime(e)}</div>`;
-      info.onclick = () => showDetail(e);
-
-      li.append(box, info);
+      li.appendChild(taskCard(e, `${e.course} · ${fmtDay(e.due)}, ${fmtTime(e)}`));
       list.appendChild(li);
     }
   }
@@ -239,13 +267,14 @@ if (typeof document !== "undefined") {
     list.innerHTML = "";
     for (const [course, color] of Object.entries(state.courseColors)) {
       const li = document.createElement("li");
-      li.innerHTML = `<span class="dot" style="--c:${color}"></span>${escapeHtml(course)}`;
+      li.style.setProperty("--c", color);
+      li.textContent = course;
       list.appendChild(li);
     }
   }
 
   function renderAll() {
-    renderCalendar();
+    renderWeek();
     renderUpcoming();
     renderCourses();
   }
@@ -267,6 +296,7 @@ if (typeof document !== "undefined") {
       toggleDone(e.id);
       hideDetail();
     };
+    document.querySelector(".modal-card").style.setProperty("--c", state.courseColors[e.course]);
     $("detail").classList.remove("hidden");
   }
   function hideDetail() {
@@ -388,20 +418,16 @@ if (typeof document !== "undefined") {
   $("settingsBtn").onclick = showSetup;
 
   $("prevBtn").onclick = () => {
-    state.viewMonth--;
-    if (state.viewMonth < 0) { state.viewMonth = 11; state.viewYear--; }
-    renderCalendar();
+    state.weekStart = addDays(state.weekStart, -7);
+    renderWeek();
   };
   $("nextBtn").onclick = () => {
-    state.viewMonth++;
-    if (state.viewMonth > 11) { state.viewMonth = 0; state.viewYear++; }
-    renderCalendar();
+    state.weekStart = addDays(state.weekStart, 7);
+    renderWeek();
   };
   $("todayBtn").onclick = () => {
-    const t = new Date();
-    state.viewYear = t.getFullYear();
-    state.viewMonth = t.getMonth();
-    renderCalendar();
+    state.weekStart = startOfWeek(new Date());
+    renderWeek();
   };
 
   $("rangeSelect").value = state.range;
