@@ -43,7 +43,7 @@ The site is hosted on [Vercel](https://vercel.com) and connected to this GitHub 
 | `index.html` | The page layout |
 | `style.css` | How it looks (also supports dark mode) |
 | `app.js` | Reads the feed and draws the calendar |
-| `book.html`, `book.js` | The book dashboard page, with Chapter Notes |
+| `book.html`, `book.js` | The book dashboard page, with Book Notes |
 | `learn.js` | The Learning Center tab (class cards and book search) |
 | `api/feed.js` | Runs on Vercel and downloads the Canvas feed for the page |
 | `server.py` | Optional: runs the site on your own computer for testing (`python server.py`) |
