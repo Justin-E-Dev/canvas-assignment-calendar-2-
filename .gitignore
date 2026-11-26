@@ -13,5 +13,3 @@ __pycache__/
 Thumbs.db
 .vscode/
 
-# Node packages (Vercel installs them from package.json)
-node_modules/

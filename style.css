@@ -507,6 +507,30 @@ a.btn { text-decoration: none; display: inline-block; }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
+#chapterHelp:not(:empty) { margin-top: 14px; }
+.ask { padding: 18px 20px; border-radius: 16px; background: color-mix(in srgb, var(--c) 8%, var(--card)); }
+.ask-heading { margin: 0 0 10px; font-weight: 800; font-family: "Bricolage Grotesque", sans-serif; font-size: 1.15rem; }
+.ask-steps { margin: 0; padding-left: 22px; display: grid; gap: 16px; line-height: 1.5; }
+.ask-steps li::marker { font-weight: 800; color: var(--c); }
+.ask-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.ask .btn { background: var(--c); border-color: var(--c); color: #fff; }
+.ask textarea {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  font: inherit;
+  font-size: 0.88rem;
+  padding: 10px 12px;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--text);
+  resize: vertical;
+}
+.ask textarea:focus { outline: none; border-color: var(--c); }
+.ask-prompt { font-family: ui-monospace, monospace; font-size: 0.78rem !important; color: var(--muted) !important; }
+.ask-msg { margin: 8px 0 0; color: #d6336c; font-weight: 500; }
+.ask-msg:empty { display: none; }
 .notes-error { color: #d6336c; font-weight: 500; margin: 0; }
 .notes-detail { margin: 6px 0 0; font-size: 0.8rem; color: var(--muted); overflow-wrap: anywhere; }
 

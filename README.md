@@ -7,7 +7,7 @@ A bold, colorful assignment board built from your Canvas calendar feed. It shows
 - A "Due in the next…" list you can set to 1 week, 2 weeks, or a month
 - A time estimate on every assignment (guessed from its title and description; click a card to change it), plus totals per day, per week and for the "Due in the next…" list
 - A **Learning Center** tab with a card for every class, where you can add each class's books by ISBN or by searching (with cover previews, from Open Library or Google Books)
-- A **book dashboard** for each book (click **Open**), with AI-written **Chapter Notes**: pick a chapter and get its key concepts, terms and test takeaways
+- A **book dashboard** for each book (click **Open**), with **Chapter Notes**: pick a chapter and get its key concepts, terms and test takeaways, written by Claude in your free Claude.ai chat
 - Check-offs for finished work (tap the circle on a card; saved in your browser)
 
 No accounts or API tokens needed.
@@ -22,15 +22,14 @@ Keep the feed link private. Anyone who has it can see your calendar. The website
 
 You can also download the `.ics` file from Canvas and use **Load .ics file** instead.
 
-## Setting up AI Chapter Notes
+## How Chapter Notes work (free)
 
-Chapter Notes use Claude, Anthropic's AI, through `api/study.js`. It needs an Anthropic API key:
+Chapter Notes are written by Claude in your own Claude.ai chat, so there's nothing to pay for or set up:
 
-1. Create a key at [console.anthropic.com](https://console.anthropic.com) (API usage is paid; one chapter's notes typically costs a few cents).
-2. In Vercel, open the project, go to **Settings → Environment Variables**, and add `ANTHROPIC_API_KEY` with your key.
-3. Redeploy (Deployments → ⋯ → Redeploy) so the site picks it up.
+1. On a book's page, pick a chapter and click **Get notes**, then **Copy & open Claude**. The request is copied and Claude.ai opens in a new tab.
+2. Send it there, copy Claude's answer, and paste it back into the page. The page formats the notes and saves them in your browser.
 
-Never put the key in this code. Notes are saved in your browser after the first time, so opening them again is free.
+If the book's chapter list isn't found online, the page can ask Claude for it the same way, or you can type a chapter in.
 
 ## Hosting
 
@@ -44,8 +43,6 @@ The site is hosted on [Vercel](https://vercel.com) and connected to this GitHub 
 | `style.css` | How it looks (also supports dark mode) |
 | `app.js` | Reads the feed and draws the calendar |
 | `book.html`, `book.js` | The book dashboard page, with Chapter Notes |
-| `api/study.js` | Runs on Vercel and asks Claude for chapter lists and chapter notes |
-| `package.json` | Lists the Anthropic code library Vercel installs for `api/study.js` |
 | `learn.js` | The Learning Center tab (class cards and book search) |
 | `api/feed.js` | Runs on Vercel and downloads the Canvas feed for the page |
 | `server.py` | Optional: runs the site on your own computer for testing (`python server.py`) |

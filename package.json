@@ -1,8 +1,0 @@
-{
-  "name": "canvas-assignment-calendar",
-  "private": true,
-  "description": "Assignment board and Learning Center built from a Canvas calendar feed",
-  "dependencies": {
-    "@anthropic-ai/sdk": "1.8.0"
-  }
-}
