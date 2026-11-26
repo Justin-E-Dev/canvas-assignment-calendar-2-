@@ -88,9 +88,14 @@
       /* not JSON */
     }
     if (!res.ok) {
-      throw new Error((data && data.error) || (res.status === 404
-        ? "AI notes only work on the live website."
-        : `Something went wrong (${res.status}).`));
+      let message = (data && data.error) || {
+        404: "AI notes only work on the live website.",
+        504: "The AI took too long to answer (Vercel's time limit). Please try again.",
+      }[res.status] || `Something went wrong (error ${res.status}).`;
+      // Technical details help with fixing problems; shown in small text under the message.
+      const err = new Error(message);
+      err.detail = (data && data.detail) || (data ? "" : `HTTP ${res.status}, no details from the server`);
+      throw err;
     }
     return data;
   }
@@ -151,7 +156,7 @@
         list = data.recognized ? data.chapters || [] : [];
         note = data.note || "";
       } catch (err) {
-        note = err.message;
+        note = err.message + (err.detail ? ` (Details: ${err.detail})` : "");
       }
     }
     chapters = list;
@@ -203,7 +208,8 @@
       const i = chapters.findIndex((c) => chapterKey(c) === chapterKey(ch));
       if (i >= 0) $("chapterSelect").value = String(i);
     } catch (err) {
-      $("notes").innerHTML = `<p class="notes-error">${esc(err.message)}</p>`;
+      $("notes").innerHTML = `<p class="notes-error">${esc(err.message)}</p>` +
+        (err.detail ? `<p class="notes-detail">Details: ${esc(err.detail)}</p>` : "");
     } finally {
       setBusy(false);
     }

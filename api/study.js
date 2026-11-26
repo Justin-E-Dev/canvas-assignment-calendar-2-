@@ -107,7 +107,8 @@ async function askClaude(prompt, schema) {
     model: MODEL,
     max_tokens: 16000,
     system: SYSTEM,
-    output_config: { effort: "medium", format: { type: "json_schema", schema } },
+    // "low" effort keeps answers fast enough for Vercel's 60-second limit; study notes don't need deep reasoning.
+    output_config: { effort: "low", format: { type: "json_schema", schema } },
     // If Claude declines a request, retry it on Anthropic's recommended fallback model.
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
@@ -192,13 +193,16 @@ If you aren't sure what this exact chapter covers in this edition, base the note
     }
     if (err instanceof Anthropic.APIError) {
       console.error("Anthropic API error", err.status, err.message);
-      return res.status(502).json({ error: "The AI service had a problem. Please try again." });
+      return res.status(502).json({
+        error: "The AI service had a problem. Please try again.",
+        detail: `Anthropic API error ${err.status ?? ""}: ${String(err.message).slice(0, 400)}`,
+      });
     }
     if (err instanceof SyntaxError) {
       return res.status(502).json({ error: "The AI sent back an unreadable answer. Please try again." });
     }
     console.error("study error", err);
-    return res.status(500).json({ error: "Something went wrong. Please try again." });
+    return res.status(500).json({ error: "Something went wrong. Please try again.", detail: String(err && err.message).slice(0, 400) });
   }
 };
 

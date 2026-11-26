@@ -508,6 +508,7 @@ a.btn { text-decoration: none; display: inline-block; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
 .notes-error { color: #d6336c; font-weight: 500; margin: 0; }
+.notes-detail { margin: 6px 0 0; font-size: 0.8rem; color: var(--muted); overflow-wrap: anywhere; }
 
 .notes-card { border-top: 2px dashed var(--line); padding-top: 18px; }
 .notes-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
