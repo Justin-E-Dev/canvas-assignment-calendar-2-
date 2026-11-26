@@ -6,6 +6,7 @@ A bold, colorful assignment board built from your Canvas calendar feed. It shows
 - Each course in its own color
 - A "Due in the next…" list you can set to 1 week, 2 weeks, or a month
 - A time estimate on every assignment (guessed from its title and description; click a card to change it), plus totals per day, per week and for the "Due in the next…" list
+- A **Learning Center** tab with a card for every class, where you can add each class's books by ISBN or by searching (with cover previews, from Open Library or Google Books)
 - Check-offs for finished work (tap the circle on a card; saved in your browser)
 
 No accounts or API tokens needed.
@@ -31,5 +32,6 @@ The site is hosted on [Vercel](https://vercel.com) and connected to this GitHub 
 | `index.html` | The page layout |
 | `style.css` | How it looks (also supports dark mode) |
 | `app.js` | Reads the feed and draws the calendar |
+| `learn.js` | The Learning Center tab (class cards and book search) |
 | `api/feed.js` | Runs on Vercel and downloads the Canvas feed for the page |
 | `server.py` | Optional: runs the site on your own computer for testing (`python server.py`) |

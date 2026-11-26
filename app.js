@@ -372,7 +372,33 @@ if (typeof document !== "undefined") {
     renderWeek();
     renderUpcoming();
     renderCourses();
+    renderLearn();
   }
+
+  // Learning Center: one card per class. Only rebuilt when the class list
+  // changes, so a search you're in the middle of isn't wiped out.
+  let learnCourses = null;
+  function renderLearn() {
+    let courses = Object.keys(state.courseColors);
+    if (courses.length > 1) courses = courses.filter((c) => c !== "Other");
+    const key = courses.join("\n");
+    if (key === learnCourses) return;
+    learnCourses = key;
+    LearningCenter.render(courses, state.courseColors);
+  }
+
+  // ----- Tabs (Board / Learning Center), kept in the address bar as #board or #learn -----
+  function showView() {
+    const view = location.hash === "#learn" ? "learn" : "board";
+    $("boardView").classList.toggle("hidden", view !== "board");
+    $("learnView").classList.toggle("hidden", view !== "learn");
+    document.querySelectorAll("#tabs a").forEach((a) => {
+      const on = a.dataset.view === view;
+      a.classList.toggle("active", on);
+      on ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current");
+    });
+  }
+  window.addEventListener("hashchange", showView);
 
   // ----- Detail popup -----
   function showDetail(e) {
@@ -445,9 +471,12 @@ if (typeof document !== "undefined") {
   function showApp() {
     $("setup").classList.add("hidden");
     $("app").classList.remove("hidden");
+    $("tabs").classList.remove("hidden");
+    showView();
   }
   function showSetup() {
     $("app").classList.add("hidden");
+    $("tabs").classList.add("hidden");
     $("setup").classList.remove("hidden");
     $("feedUrl").value = load(STORE.feedUrl, "");
   }

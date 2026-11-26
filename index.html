@@ -15,6 +15,10 @@
       <span class="logo" aria-hidden="true"></span>
       <h1>My Assignment Board</h1>
     </div>
+    <nav id="tabs" class="tabs hidden" aria-label="Sections">
+      <a href="#board" data-view="board">Board</a>
+      <a href="#learn" data-view="learn">Learning Center</a>
+    </nav>
     <div class="topbar-actions">
       <button id="refreshBtn" class="btn" title="Reload from your saved feed link">Refresh</button>
       <button id="settingsBtn" class="btn btn-ghost">Settings</button>
@@ -43,6 +47,7 @@
   </section>
 
   <main id="app" class="hidden">
+   <div id="boardView">
     <section class="week">
       <div class="week-nav">
         <div>
@@ -79,6 +84,16 @@
         <p id="status" class="status"></p>
       </div>
     </section>
+   </div>
+
+   <div id="learnView" class="hidden">
+    <section class="learn-head">
+      <p class="eyebrow">Learning Center</p>
+      <h2>Your classes</h2>
+      <p class="learn-intro">Add the books for each class. Type an ISBN to find an exact book, or search by title or author.</p>
+    </section>
+    <div id="classList" class="class-grid"></div>
+   </div>
   </main>
 
   <div id="detail" class="modal hidden" role="dialog" aria-modal="true">
@@ -88,6 +103,7 @@
     </div>
   </div>
 
+  <script src="learn.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
