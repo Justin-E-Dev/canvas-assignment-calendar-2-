@@ -151,6 +151,19 @@ body {
 /* Sidebar */
 .sidebar h2 { font-size: 1rem; margin: 4px 0 10px; }
 .sidebar h2:not(:first-child) { margin-top: 22px; }
+.upcoming-head { display: flex; align-items: center; gap: 8px; margin: 4px 0 10px; }
+.upcoming-head h2 { margin: 0; }
+.upcoming-head select {
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
 
 .upcoming, .courses { list-style: none; margin: 0; padding: 0; }
 .upcoming li {

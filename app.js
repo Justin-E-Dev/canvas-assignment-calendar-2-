@@ -6,6 +6,14 @@ const STORE = {
   lastIcs: "cac.lastIcs",
   done: "cac.done",
   hideDone: "cac.hideDone",
+  range: "cac.range",
+};
+
+// How far ahead the "Due in the next…" list looks.
+const RANGES = {
+  "1w": { label: "week", days: 7 },
+  "2w": { label: "2 weeks", days: 14 },
+  "1m": { label: "month", months: 1 },
 };
 
 const COLORS = [
@@ -121,6 +129,7 @@ if (typeof document !== "undefined") {
     courseColors: {},
     done: new Set(load(STORE.done, [])),
     hideDone: load(STORE.hideDone, false),
+    range: RANGES[load(STORE.range, "1w")] ? load(STORE.range, "1w") : "1w",
     viewYear: new Date().getFullYear(),
     viewMonth: new Date().getMonth(),
   };
@@ -185,18 +194,22 @@ if (typeof document !== "undefined") {
   function renderUpcoming() {
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const weekOut = new Date(startOfToday);
-    weekOut.setDate(weekOut.getDate() + 8);
+    const range = RANGES[state.range];
+    // End is exclusive: the day after the last day shown (today counts as day 0).
+    const end = new Date(startOfToday);
+    if (range.months) end.setMonth(end.getMonth() + range.months);
+    else end.setDate(end.getDate() + range.days);
+    end.setDate(end.getDate() + 1);
 
     const items = visible().filter((e) => {
       const after = e.allDay ? e.due >= startOfToday : e.due >= now;
-      return after && e.due < weekOut;
+      return after && e.due < end;
     });
 
     const list = $("upcoming");
     list.innerHTML = "";
     if (!items.length) {
-      list.innerHTML = `<li class="empty">Nothing due this week.</li>`;
+      list.innerHTML = `<li class="empty">Nothing due in the next ${range.label}.</li>`;
       return;
     }
     for (const e of items) {
@@ -389,6 +402,13 @@ if (typeof document !== "undefined") {
     state.viewYear = t.getFullYear();
     state.viewMonth = t.getMonth();
     renderCalendar();
+  };
+
+  $("rangeSelect").value = state.range;
+  $("rangeSelect").onchange = (ev) => {
+    state.range = ev.target.value;
+    save(STORE.range, state.range);
+    renderUpcoming();
   };
 
   $("hideDone").checked = state.hideDone;

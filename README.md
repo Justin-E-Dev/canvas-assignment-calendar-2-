@@ -4,7 +4,7 @@ A simple calendar website for your Canvas assignments. It reads your Canvas cale
 
 - A month calendar with every assignment on its due date
 - Each course in its own color
-- A "due in the next 7 days" list
+- A "due in the next…" list you can set to 1 week, 2 weeks, or a month
 - Check-offs for finished work (saved in your browser)
 
 No accounts or API tokens needed.
