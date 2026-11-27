@@ -29,7 +29,8 @@ Book covers are real cover images looked up on Google Books (then Open Library) 
 - `notes/index.json` lists the books that have notes (matched by ISBN, or by title and author) and their chapters.
 - Each chapter's notes are a Markdown file, for example `notes/kurose-ross-8e/ch3.md`.
 - Each chapter also has study tools in a matching `.study.json` file (for example `notes/kurose-ross-8e/ch3.study.json`): **Key Concepts**, **Flashcards** (flip, shuffle) and a **Practice Quiz** (multiple choice with explanations and a score). They appear at the top of the chapter, above the full notes.
-- **Other books:** ask Claude in a Claude Code chat for this repository: "Add notes for <book title>". Claude follows `notes/HOW-TO-WRITE-NOTES.md` (condensed notes by default, to save usage). Until then, the book page says "No notes for this book yet."
+- **Other books: press "Generate this chapter".** Opening a book loads its chapter list; on each chapter, the button has Google's free Gemini write condensed notes, key concepts, flashcards and a quiz in one request (usually 20–60 seconds). Results are saved in your browser; **Regenerate chapter** (top right) writes it again. Needs a free `GEMINI_API_KEY` in Vercel (Settings → Environment Variables; get one at [Google AI Studio](https://aistudio.google.com/apikey)), then redeploy. Free limits reset daily at midnight Pacific time; each Gemini model has its own limit and the site switches models when one runs out.
+- Notes can also be added to the site itself by asking Claude in a chat ("Add notes for <book title>"), following `notes/HOW-TO-WRITE-NOTES.md`.
 
 ## Hosting
 
@@ -43,6 +44,7 @@ The site is hosted on [Vercel](https://vercel.com) and connected to this GitHub 
 | `style.css` | How it looks (also supports dark mode) |
 | `app.js` | Reads the feed and draws the calendar |
 | `book.html`, `book.js`, `book.css` | The book dashboard: chapters in a sidebar, and notes, key concepts, flashcards and quiz in panels that each scroll on their own |
+| `api/gemini.js` | Runs on Vercel and asks Gemini to write a chapter list or a chapter (streamed) |
 | `notes/` | The book notes: an index plus one Markdown file per chapter |
 | `learn.js` | The Learning Center tab (class cards and book search) |
 | `api/feed.js` | Runs on Vercel and downloads the Canvas feed for the page |

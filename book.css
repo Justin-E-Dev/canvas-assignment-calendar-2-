@@ -474,3 +474,9 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .no-notes { line-height: 1.6; max-width: 60ch; }
 .no-notes p { margin: 0 0 10px; }
 .ask-line { padding: 10px 14px; border-radius: 10px; background: var(--navy-soft); font-weight: 600; }
+
+/* "Generate this chapter" */
+.generate-box { padding: 22px; border-radius: 14px; background: var(--bg); line-height: 1.6; }
+.generate-box p { margin: 0 0 10px; }
+.generate-box .muted { color: var(--muted); }
+.gen-btn { padding: 10px 20px; font-size: 0.9rem; }

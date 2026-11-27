@@ -766,21 +766,134 @@
     }
   }
 
+  // ---------- One-request chapters (condensed notes + key concepts + flashcards + quiz) ----------
+  function splitChapterText(text) {
+    const at = (re) => {
+      const m = text.match(re);
+      return m ? m.index : -1;
+    };
+    const marks = [
+      ["concepts", at(/^\s*=+\s*CONCEPTS\s*=+\s*$/im)],
+      ["cards", at(/^\s*=+\s*CARDS\s*=+\s*$/im)],
+      ["quiz", at(/^\s*=+\s*QUIZ\s*=+\s*$/im)],
+    ].filter(([, n]) => n >= 0).sort((a, b) => a[1] - b[1]);
+    const notesEnd = marks.length ? marks[0][1] : text.length;
+    const part = (name) => {
+      const k = marks.findIndex(([n]) => n === name);
+      if (k < 0) return "";
+      const start = text.indexOf("\n", marks[k][1]);
+      return text.slice(start < 0 ? text.length : start + 1, k + 1 < marks.length ? marks[k + 1][1] : text.length);
+    };
+    const notes = text.slice(0, notesEnd);
+    return {
+      intro: lineValue(notes, "INTRO"),
+      notes: notes.replace(/^\s*\**INTRO:\**.*$/im, "").trim(),
+      concepts: part("concepts"),
+      cards: part("cards"),
+      quiz: part("quiz"),
+      seen: marks.map(([n]) => n),
+    };
+  }
+
+  const chapterMarkdown = (ch, parts) => `# Chapter ${ch.number}: ${ch.title}\n\n${parts.intro}\n\n${parts.notes}`;
+
+  function renderNotesKeepScroll(md) {
+    const box = $("notesBody");
+    const top = box.scrollTop;
+    renderNotes(md);
+    box.scrollTop = top;
+  }
+
+  function showGenerateButton(ch, token) {
+    const c = chapterStore(ch);
+    $("sectionJump").classList.add("hidden");
+    $("notesBody").innerHTML = `<div class="generate-box">
+        <p><strong>Chapter ${esc(ch.number)}: ${esc(ch.title)}</strong></p>
+        <p class="muted">No notes for this chapter yet. Gemini can write condensed notes, key concepts, flashcards and a quiz for it in one go (usually 20–60 seconds, free).</p>
+        <button class="pill-btn gen-btn" id="genBtn" type="button">Generate this chapter</button>
+      </div>`;
+    const hint = waitingMsg("Press “Generate this chapter” in the Notes panel.");
+    if (!c.study || !c.study.keyConcepts) PANEL.concepts(hint);
+    else renderConcepts(c.study.keyConcepts);
+    if (!c.study || !c.study.flashcards) PANEL.flashcards(hint);
+    else renderCards(c.study.flashcards);
+    if (!c.study || !c.study.quiz) PANEL.quiz(hint);
+    else renderQuiz(c.study.quiz, ch);
+    $("genBtn").onclick = () => generateChapter(ch, token);
+  }
+  const waitingMsg = (text) => `<p class="empty">${esc(text)}</p>`;
+
+  async function generateChapter(ch, token) {
+    const c = chapterStore(ch);
+    const live = () => token === showToken;
+    $("notesBody").innerHTML = waiting(`Gemini is writing Chapter ${esc(ch.number)}…`);
+    $("sectionJump").classList.add("hidden");
+    ["concepts", "flashcards", "quiz"].forEach((p) => PANEL[p](waiting("Coming up after the notes…")));
+    let lastPaint = 0;
+    let conceptsShown = 0;
+    try {
+      const text = await streamAll({ action: "chapter", chapter: ch }, {
+        onText: (t) => {
+          if (!live() || Date.now() - lastPaint < 250) return;
+          lastPaint = Date.now();
+          const parts = splitChapterText(t);
+          if (parts.notes) renderNotesKeepScroll(chapterMarkdown(ch, parts) + "\n\n*Writing…*");
+          if (parts.seen.includes("concepts")) {
+            const list = parseConcepts(parts.concepts, false);
+            if (list.length && list.length !== conceptsShown) {
+              conceptsShown = list.length;
+              renderConcepts(list);
+            }
+          }
+          if (parts.seen.includes("cards")) PANEL.flashcards(waiting(`Writing flashcards… (${parseCards(parts.cards, false).length} so far)`));
+          if (parts.seen.includes("quiz")) PANEL.quiz(waiting(`Writing quiz… (${parseQuiz(parts.quiz).length} so far)`));
+        },
+        onWait: (msg) => { if (live()) PANEL.flashcards(waiting(esc(msg))); },
+      });
+      const parts = splitChapterText(text);
+      const study = {
+        keyConcepts: parseConcepts(parts.concepts, true),
+        flashcards: parseCards(parts.cards, true),
+        quiz: parseQuiz(parts.quiz),
+      };
+      if (!parts.notes || !/^##\s/m.test(parts.notes)) throw new Error("Gemini's answer came back incomplete. Press Regenerate chapter to try again.");
+      c.markdown = chapterMarkdown(ch, parts);
+      c.study = study;
+      saveGen();
+      if (live()) {
+        renderNotes(c.markdown);
+        renderStudy(study, ch);
+      }
+    } catch (err) {
+      if (!live()) return;
+      $("notesBody").innerHTML = errorHtml(err) + `<p><button class="pill-btn" id="genRetry" type="button">Try again</button></p>`;
+      $("genRetry").onclick = () => generateChapter(ch, showToken);
+      ["concepts", "flashcards", "quiz"].forEach((p) => PANEL[p](waitingMsg("Not written yet.")));
+    }
+  }
+
   async function showGenerated(ch, token, rewrite) {
+    const c = chapterStore(ch);
     if (rewrite) {
       genBook().content[ch.number] = {};
       saveGen();
+      return generateChapter(ch, token);
     }
-    await Promise.all([
-      writeNotes(ch, token).catch((err) => {
-        if (token === showToken) {
-          $("notesBody").innerHTML = errorHtml(err) + `<p><button class="pill-btn" id="notesRetry" type="button">Try again</button></p>`;
-          $("sectionJump").classList.add("hidden");
-          $("notesRetry").onclick = () => showChapter(current);
-        }
-      }),
-      writeStudy(ch, token),
-    ]);
+    if (c.markdown) {
+      renderNotes(c.markdown);
+      if (c.study && c.study.keyConcepts && c.study.flashcards && c.study.quiz) renderStudy(c.study, ch);
+      else showStudyMissing(ch);
+      return;
+    }
+    showGenerateButton(ch, token);
+  }
+
+  function showStudyMissing(ch) {
+    const c = chapterStore(ch);
+    const s = c.study || {};
+    if (s.keyConcepts) renderConcepts(s.keyConcepts); else PANEL.concepts(waitingMsg("Not written yet. Use Regenerate chapter at the top."));
+    if (s.flashcards) renderCards(s.flashcards); else PANEL.flashcards(waitingMsg("Not written yet. Use Regenerate chapter at the top."));
+    if (s.quiz) renderQuiz(s.quiz, ch); else PANEL.quiz(waitingMsg("Not written yet. Use Regenerate chapter at the top."));
   }
 
   async function showChapter(i, rewrite) {
@@ -909,9 +1022,9 @@
     }
   }
 
-  // Automatic Gemini notes are switched off (the free API didn't work reliably).
-  // Notes are added by asking Claude in a chat; see notes/HOW-TO-WRITE-NOTES.md.
-  const GEMINI_ENABLED = false;
+  // Gemini writes notes for books without built-in notes, one chapter at a time,
+  // only when you press "Generate this chapter" (one request per chapter).
+  const GEMINI_ENABLED = true;
 
   function showNoNotes() {
     document.querySelectorAll(".p-concepts, .p-cards, .p-quiz").forEach((p) => p.classList.add("hidden"));
