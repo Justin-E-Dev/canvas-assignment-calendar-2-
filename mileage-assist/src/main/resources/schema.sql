@@ -50,3 +50,12 @@ create table if not exists user_credentials (
     label                        varchar(1000) not null,
     primary key (credential_id)
 );
+
+-- Program each trip belongs to (added after first release; safe on existing databases)
+alter table mileage_entries add column if not exists program varchar(100) not null default '';
+
+create table if not exists user_programs (
+    user_id bigint       not null references app_users(id) on delete cascade,
+    program varchar(100) not null,
+    primary key (user_id, program)
+);

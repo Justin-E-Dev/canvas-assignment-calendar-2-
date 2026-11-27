@@ -14,8 +14,13 @@ public record EntryInput(
         @NotBlank @Size(max = 10) @Pattern(regexp = "[A-Za-z .\\-]+", message = "letters only") String initials,
         @NotBlank @Size(max = 200) String startLocation,
         @NotBlank @Size(max = 200) String endLocation,
+        @Size(max = 100) String program,
         @NotNull @DecimalMin("0") @DecimalMax("99999999") BigDecimal odometerStart,
         @NotNull @DecimalMin("0") @DecimalMax("99999999") BigDecimal odometerEnd) {
+
+    public String normalizedProgram() {
+        return program == null ? "" : program.trim().replaceAll("\\s+", " ");
+    }
 
     public String normalizedInitials() {
         return initials.trim().toUpperCase(java.util.Locale.ROOT);

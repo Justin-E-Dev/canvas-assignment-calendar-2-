@@ -141,7 +141,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 64px; }
 .sheet-stats { display: flex; gap: 18px; color: var(--grey-mid); font-size: .9rem; }
 .sheet-stats b { color: var(--grey-dark); }
 .sheet-wrap { overflow-x: auto; border: 1px solid var(--grey-light-2); border-radius: 8px; -webkit-overflow-scrolling: touch; }
-table.sheet { border-collapse: collapse; width: 100%; min-width: 860px; font-size: .92rem; }
+table.sheet { border-collapse: collapse; width: 100%; min-width: 1020px; font-size: .92rem; }
 .sheet th {
   position: sticky; top: 0; background: var(--grey-dark); color: #fff; text-align: left;
   padding: 10px 8px; font-weight: 600; white-space: nowrap;
@@ -166,7 +166,7 @@ table.sheet { border-collapse: collapse; width: 100%; min-width: 860px; font-siz
 .sheet tr.saved td { animation: flash 1s ease; }
 .sheet tr.bad td { background: #FBE9E7 !important; }
 @keyframes flash { from { background: var(--green-tint); } }
-.col-date { width: 150px; } .col-ini { width: 90px; } .col-num { width: 130px; } .col-miles { width: 90px; }
+.col-date { width: 150px; } .col-ini { width: 90px; } .col-num { width: 130px; } .col-miles { width: 90px; } .col-prog { width: 170px; }
 
 /* ---------- Toast ---------- */
 .toast {

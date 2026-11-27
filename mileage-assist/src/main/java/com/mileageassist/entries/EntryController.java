@@ -68,6 +68,18 @@ public class EntryController {
         return ResponseEntity.noContent().build();
     }
 
+    @GetMapping("/programs")
+    public Map<String, Object> programs(Principal p) {
+        long uid = userId(p);
+        return Map.of("programs", entries.programs(uid), "clients", entries.clientPrograms(uid));
+    }
+
+    @DeleteMapping("/programs/{value}")
+    public ResponseEntity<Void> forgetProgram(@PathVariable String value, Principal p) {
+        entries.forgetProgram(userId(p), value);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/export/csv")
     public ResponseEntity<byte[]> csv(Principal p) {
         return download(SpreadsheetExport.csv(entries.findAll(userId(p))), "csv",

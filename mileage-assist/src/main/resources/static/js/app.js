@@ -2,6 +2,8 @@
   const $ = (id) => document.getElementById(id);
   let entries = [];
   let initials = [];
+  let programs = [];
+  let clientPrograms = {}; // lower-cased client (end location) -> program
   const TRASH = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12ZM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4Z"/></svg>';
 
   const todayISO = () => {
@@ -79,6 +81,52 @@
       chips.appendChild(c);
     });
   }
+  function fillChoices(listId, chipsId, values, inputId) {
+    const list = $(listId);
+    list.replaceChildren();
+    values.forEach((v) => { const o = document.createElement('option'); o.value = v; list.appendChild(o); });
+    if (!chipsId) return;
+    const chips = $(chipsId);
+    chips.replaceChildren();
+    values.forEach((v) => {
+      const c = document.createElement('button');
+      c.type = 'button';
+      c.className = 'chip';
+      c.textContent = v;
+      c.addEventListener('click', () => { $(inputId).value = v; $(inputId).dataset.auto = ''; });
+      chips.appendChild(c);
+    });
+  }
+
+  async function loadPrograms() {
+    const data = await MA.api('/api/programs');
+    programs = data.programs;
+    clientPrograms = {};
+    const clients = [];
+    Object.entries(data.clients).forEach(([client, program]) => {
+      clientPrograms[client.trim().toLowerCase()] = program;
+      clients.push(client);
+    });
+    fillChoices('programs-list', 'programs-chips', programs, 'f-program');
+    fillChoices('clients-list', null, clients.sort((a, b) => a.localeCompare(b)));
+  }
+
+  // When the client (end location) is one we've seen, fill in its program,
+  // unless the user has typed or picked a program themselves.
+  function autoFillProgram() {
+    const prog = $('f-program');
+    const match = clientPrograms[$('f-end-loc').value.trim().toLowerCase()];
+    const userChose = prog.value && prog.dataset.auto !== '1';
+    if (userChose) return;
+    prog.value = match || '';
+    prog.dataset.auto = match ? '1' : '';
+    $('program-hint').textContent = match
+      ? 'Filled in from this client\'s last trip. Change it if needed.'
+      : 'Fills in automatically for clients you\'ve logged before.';
+  }
+  $('f-end-loc').addEventListener('input', autoFillProgram);
+  $('f-program').addEventListener('input', () => { $('f-program').dataset.auto = ''; });
+
   async function loadInitials() {
     initials = await MA.api('/api/initials');
     renderInitials();
@@ -104,7 +152,12 @@
     updateMiles();
   }
 
-  form.addEventListener('reset', () => setTimeout(() => { $('entry-error').textContent = ''; prefill(); }, 0));
+  form.addEventListener('reset', () => setTimeout(() => {
+    $('entry-error').textContent = '';
+    $('f-program').dataset.auto = '';
+    $('program-hint').textContent = 'Fills in automatically for clients you\'ve logged before.';
+    prefill();
+  }, 0));
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const err = $('entry-error');
@@ -114,10 +167,11 @@
       initials: $('f-initials').value.trim(),
       startLocation: $('f-start-loc').value.trim(),
       endLocation: $('f-end-loc').value.trim(),
+      program: $('f-program').value.trim(),
       odometerStart: $('f-odo-start').value,
       odometerEnd: $('f-odo-end').value,
     };
-    if (!body.initials || !body.startLocation || !body.endLocation || body.odometerStart === '' || body.odometerEnd === '') {
+    if (!body.initials || !body.startLocation || !body.endLocation || !body.program || body.odometerStart === '' || body.odometerEnd === '') {
       err.textContent = 'Please fill in every field.';
       return;
     }
@@ -133,6 +187,7 @@
       MA.toast('Trip saved: ' + fmtMiles(saved.miles) + ' miles.');
       form.reset();
       loadInitials();
+      loadPrograms();
       renderToday();
     } catch (ex) {
       err.textContent = ex.message;
@@ -164,7 +219,7 @@
       route.textContent = x.startLocation + ' → ' + x.endLocation;
       const meta = document.createElement('div');
       meta.className = 'trip-meta';
-      meta.textContent = x.initials + ' · ' + x.odometerStart + ' → ' + x.odometerEnd;
+      meta.textContent = x.initials + (x.program ? ' · ' + x.program : '') + ' · ' + x.odometerStart + ' → ' + x.odometerEnd;
       left.append(route, meta);
       const miles = document.createElement('div');
       miles.className = 'trip-miles';
@@ -180,6 +235,7 @@
     { key: 'initials', type: 'text', max: 10, list: 'initials-list' },
     { key: 'startLocation', type: 'text', max: 200 },
     { key: 'endLocation', type: 'text', max: 200 },
+    { key: 'program', type: 'text', max: 100, list: 'programs-list' },
     { key: 'odometerStart', type: 'number', num: true },
     { key: 'odometerEnd', type: 'number', num: true },
   ];
@@ -259,6 +315,7 @@
       renderStats();
       renderToday();
       loadInitials();
+      loadPrograms();
     } catch (ex) {
       tr.classList.add('bad');
       MA.toast(ex.message + ' Change not saved.', true);
@@ -271,7 +328,7 @@
   (async function init() {
     try {
       await loadMe();
-      [entries] = await Promise.all([MA.api('/api/entries'), loadInitials()]);
+      [entries] = await Promise.all([MA.api('/api/entries'), loadInitials(), loadPrograms()]);
       prefill();
       renderToday();
       if (new URLSearchParams(location.search).has('welcome')) {

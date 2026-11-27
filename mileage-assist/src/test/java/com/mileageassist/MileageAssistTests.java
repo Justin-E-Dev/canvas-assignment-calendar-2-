@@ -25,7 +25,7 @@ class MileageAssistTests {
     @Autowired PasswordEncoder encoder;
 
     private static final String TRIP = """
-        {"initials":"je","startLocation":"=HYPERLINK(\\"x\\")","endLocation":"B",
+        {"initials":"je","startLocation":"=HYPERLINK(\\"x\\")","endLocation":"B","program":" Senior  Care ",
          "odometerStart":100,"odometerEnd":112.5}""";
 
     @BeforeEach
@@ -65,6 +65,10 @@ class MileageAssistTests {
         mvc.perform(get("/api/entries").with(user("b@test.com"))).andExpect(jsonPath("$.length()").value(0));
         mvc.perform(delete("/api/entries/" + id).with(user("b@test.com")).with(csrf())).andExpect(status().isNotFound());
         mvc.perform(get("/api/initials").with(user("a@test.com"))).andExpect(jsonPath("$[0]").value("JE"));
+        mvc.perform(get("/api/programs").with(user("a@test.com")))
+                .andExpect(jsonPath("$.programs[0]").value("Senior Care"))
+                .andExpect(jsonPath("$.clients.B").value("Senior Care"));
+        mvc.perform(get("/api/programs").with(user("b@test.com"))).andExpect(jsonPath("$.programs.length()").value(0));
     }
 
     @Test
@@ -76,9 +80,9 @@ class MileageAssistTests {
 
     @Test
     void csvNeutralisesFormulas() {
-        var e = new com.mileageassist.entries.Entry(1, java.time.LocalDate.of(2026, 1, 2), "JE", "=cmd()", "@x",
+        var e = new com.mileageassist.entries.Entry(1, java.time.LocalDate.of(2026, 1, 2), "JE", "=cmd()", "@x", "+prog",
                 java.math.BigDecimal.ONE, java.math.BigDecimal.TEN);
         String csv = new String(SpreadsheetExport.csv(java.util.List.of(e)), java.nio.charset.StandardCharsets.UTF_8);
-        assertThat(csv).contains("\"'=cmd()\"").contains("\"'@x\"").contains(",9");
+        assertThat(csv).contains("\"'=cmd()\"").contains("\"'@x\"").contains("\"'+prog\"").contains(",9");
     }
 }

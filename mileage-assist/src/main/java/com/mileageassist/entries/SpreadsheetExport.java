@@ -11,7 +11,7 @@ import java.util.zip.ZipOutputStream;
 /** Builds CSV and native Excel (.xlsx) files without any third-party service. */
 public final class SpreadsheetExport {
     static final String[] HEADERS = {"Date", "Initials", "Start Location", "End Location",
-            "Odometer Start", "Odometer End", "Miles"};
+            "Program", "Odometer Start", "Odometer End", "Miles"};
 
     private SpreadsheetExport() {}
 
@@ -23,6 +23,7 @@ public final class SpreadsheetExport {
               .append(csvCell(e.initials())).append(',')
               .append(csvCell(e.startLocation())).append(',')
               .append(csvCell(e.endLocation())).append(',')
+              .append(csvCell(e.program())).append(',')
               .append(e.odometerStart().toPlainString()).append(',')
               .append(e.odometerEnd().toPlainString()).append(',')
               .append(e.miles().toPlainString()).append("\r\n");
@@ -51,6 +52,7 @@ public final class SpreadsheetExport {
                 .append(str(e.initials(), 0))
                 .append(str(e.startLocation(), 0))
                 .append(str(e.endLocation(), 0))
+                .append(str(e.program(), 0))
                 .append(num(e.odometerStart()))
                 .append(num(e.odometerEnd()))
                 .append(num(e.miles()))
@@ -60,7 +62,7 @@ public final class SpreadsheetExport {
                 + "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
                 + "<sheetViews><sheetView workbookViewId=\"0\"><pane ySplit=\"1\" topLeftCell=\"A2\" state=\"frozen\"/></sheetView></sheetViews>"
                 + "<cols><col min=\"1\" max=\"2\" width=\"12\" customWidth=\"1\"/><col min=\"3\" max=\"4\" width=\"30\" customWidth=\"1\"/>"
-                + "<col min=\"5\" max=\"7\" width=\"15\" customWidth=\"1\"/></cols>"
+                + "<col min=\"5\" max=\"5\" width=\"22\" customWidth=\"1\"/><col min=\"6\" max=\"8\" width=\"15\" customWidth=\"1\"/></cols>"
                 + "<sheetData>" + rows + "</sheetData></worksheet>";
 
         try (var bytes = new ByteArrayOutputStream(); var zip = new ZipOutputStream(bytes)) {

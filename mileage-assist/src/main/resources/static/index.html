@@ -65,7 +65,15 @@
         </div>
         <div class="field">
           <label for="f-end-loc">End location</label>
-          <input id="f-end-loc" maxlength="200" autocomplete="off" required>
+          <input id="f-end-loc" list="clients-list" maxlength="200" autocomplete="off" required>
+          <datalist id="clients-list"></datalist>
+        </div>
+        <div class="field full">
+          <label for="f-program">Program</label>
+          <input id="f-program" list="programs-list" maxlength="100" autocomplete="off" required placeholder="Choose or type a program">
+          <datalist id="programs-list"></datalist>
+          <div class="chips" id="programs-chips"></div>
+          <span class="hint" id="program-hint">Fills in automatically for clients you've logged before.</span>
         </div>
         <div class="field">
           <label for="f-odo-start">Odometer start</label>
@@ -125,6 +133,7 @@
               <th class="col-ini">Initials</th>
               <th>Start Location</th>
               <th>End Location</th>
+              <th class="col-prog">Program</th>
               <th class="col-num">Odometer Start</th>
               <th class="col-num">Odometer End</th>
               <th class="col-miles">Miles</th>
