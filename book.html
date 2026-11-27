@@ -90,6 +90,13 @@
           <header class="panel-head">
             <h3>Notes</h3>
             <div class="notes-tools">
+              <div class="notes-search" role="search">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+                <input id="notesSearch" type="search" placeholder="Search notes…" aria-label="Search these notes" autocomplete="off">
+                <span id="searchCount" class="search-count"></span>
+                <button id="searchPrev" class="search-step" type="button" aria-label="Previous match" hidden>&lsaquo;</button>
+                <button id="searchNext" class="search-step" type="button" aria-label="Next match" hidden>&rsaquo;</button>
+              </div>
               <select id="sectionJump" class="panel-select" aria-label="Jump to section"></select>
             </div>
           </header>

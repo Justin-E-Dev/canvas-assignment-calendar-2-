@@ -515,6 +515,76 @@
     };
   }
 
+  // ---------- Search inside the notes ----------
+  const search = { hits: [], at: -1 };
+  function clearMarks() {
+    $("notesBody").querySelectorAll("mark.hit").forEach((m) => m.replaceWith(document.createTextNode(m.textContent)));
+    $("notesBody").normalize();
+  }
+  function applySearch(keepPlace) {
+    const q = $("notesSearch").value.trim().toLowerCase();
+    clearMarks();
+    search.hits = [];
+    if (q) {
+      const walker = document.createTreeWalker($("notesBody"), NodeFilter.SHOW_TEXT);
+      const nodes = [];
+      while (walker.nextNode()) if (walker.currentNode.nodeValue.toLowerCase().includes(q)) nodes.push(walker.currentNode);
+      nodes.forEach((node) => {
+        const text = node.nodeValue, lower = text.toLowerCase();
+        const frag = document.createDocumentFragment();
+        let from = 0, i;
+        while ((i = lower.indexOf(q, from)) !== -1) {
+          frag.append(text.slice(from, i));
+          const m = document.createElement("mark");
+          m.className = "hit";
+          m.textContent = text.slice(i, i + q.length);
+          frag.append(m);
+          search.hits.push(m);
+          from = i + q.length;
+        }
+        frag.append(text.slice(from));
+        node.replaceWith(frag);
+      });
+    }
+    if (!keepPlace || search.at >= search.hits.length) search.at = search.hits.length ? 0 : -1;
+    showHit(!keepPlace);
+  }
+  function showHit(scroll) {
+    const n = search.hits.length, q = $("notesSearch").value.trim();
+    $("searchCount").textContent = !q ? "" : n ? `${search.at + 1} of ${n}` : "No matches";
+    $("searchPrev").hidden = $("searchNext").hidden = n < 2;
+    search.hits.forEach((m, i) => m.classList.toggle("current", i === search.at));
+    const m = search.hits[search.at];
+    if (m && scroll) {
+      const box = $("notesBody");
+      const top = m.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
+      box.scrollTo({ top: Math.max(0, top - box.clientHeight / 3), behavior: "smooth" });
+    }
+  }
+  function stepHit(d) {
+    const n = search.hits.length;
+    if (!n) return;
+    search.at = (search.at + d + n) % n;
+    showHit(true);
+  }
+  let searchTimer;
+  $("notesSearch").addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => applySearch(false), 120);
+  });
+  $("notesSearch").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); stepHit(e.shiftKey ? -1 : 1); }
+    if (e.key === "Escape") { $("notesSearch").value = ""; applySearch(false); }
+  });
+  $("searchPrev").onclick = () => stepHit(-1);
+  $("searchNext").onclick = () => stepHit(1);
+  // Re-highlight whenever the notes change (new chapter, or Gemini adding text).
+  new MutationObserver((list) => {
+    if (!$("notesSearch").value.trim()) return;
+    if (list.every((r) => [...r.addedNodes, ...r.removedNodes].every((n) => n.nodeName === "MARK" || n.nodeType === 3))) return;
+    applySearch(true);
+  }).observe($("notesBody"), { childList: true });
+
   function renderConcepts(list) {
     $("conceptsBody").innerHTML = `<ol class="concepts">${list.map((k, n) => `
       <li class="concept"><span class="concept-num">${n + 1}</span>
@@ -976,6 +1046,7 @@
     if (!ch) return;
     const token = ++showToken;
     current = i;
+    search.at = 0; // start a new chapter's search at its first match
     setChapterActive(i);
     history.replaceState(null, "", `#chapter-${ch.number}`);
     $("statChapter").textContent = `Chapter ${ch.number}`;

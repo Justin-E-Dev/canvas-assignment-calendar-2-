@@ -434,8 +434,8 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .panels.single .p-notes { grid-column: 1; grid-row: 1; height: auto; min-height: 200px; }
 
 /* Notes header tools */
-.notes-tools { display: flex; align-items: center; gap: 12px; min-width: 0; justify-content: flex-end; flex: 1; }
-.notes-tools .panel-select { max-width: 100%; min-width: 0; }
+.notes-tools { display: flex; align-items: center; gap: 10px; min-width: 0; justify-content: flex-end; flex: 1; flex-wrap: wrap; }
+.notes-tools .panel-select { max-width: 100%; min-width: 0; flex: 0 1 200px; }
 
 /* "Gemini is writing…" state */
 .writing { display: flex; align-items: center; gap: 14px; padding: 18px; border-radius: 12px; background: var(--bg); }
@@ -525,3 +525,29 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 @keyframes pulse { 50% { opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .side-nav button.writing .ch-num { animation: none; } }
 @media (max-width: 900px) { .top-btn span { display: none; } }
+
+/* Search inside the notes */
+.notes-search {
+  display: flex; align-items: center; gap: 4px; min-width: 0; flex: 1 1 180px; max-width: 300px;
+  border: 1px solid var(--line, #dfe3ee); border-radius: 10px; padding: 0 8px; background: var(--card, #fff);
+}
+.notes-search:focus-within { border-color: var(--navy, #2b3a8c); }
+.notes-search svg { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; opacity: 0.55; }
+.notes-search input {
+  flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: inherit;
+  font: inherit; font-size: 0.85rem; padding: 7px 2px;
+}
+.search-count { font-size: 0.72rem; opacity: 0.65; white-space: nowrap; }
+.search-step {
+  border: 0; background: transparent; color: inherit; font-size: 1.1rem; line-height: 1;
+  padding: 2px 5px; border-radius: 6px; cursor: pointer;
+}
+.search-step:hover { background: rgba(43, 58, 140, 0.1); }
+mark.hit { background: #fde9a6; color: inherit; border-radius: 3px; padding: 0 1px; }
+mark.hit.current { background: #f6c453; box-shadow: 0 0 0 2px #f6c453; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) mark.hit { background: rgba(246, 196, 83, 0.3); }
+  :root:not([data-theme="light"]) mark.hit.current { background: rgba(246, 196, 83, 0.6); box-shadow: 0 0 0 2px rgba(246, 196, 83, 0.6); }
+}
+:root[data-theme="dark"] mark.hit { background: rgba(246, 196, 83, 0.3); }
+:root[data-theme="dark"] mark.hit.current { background: rgba(246, 196, 83, 0.6); box-shadow: 0 0 0 2px rgba(246, 196, 83, 0.6); }
