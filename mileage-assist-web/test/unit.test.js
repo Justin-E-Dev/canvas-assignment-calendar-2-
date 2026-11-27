@@ -177,3 +177,38 @@ for (const merged of [false, true]) {
     assert.equal(s.getCell('H17').value.formula, 'SUM(H5:H16)');
   });
 }
+
+test('"Minus miles" style deduction columns are left for the form, "Total miles" is the miles column', () => {
+  assert.equal(sheets.match('minusmiles'), null);
+  assert.equal(sheets.match('lesscommutemiles'), null);
+  assert.equal(sheets.match('commutededuction'), null);
+  assert.equal(sheets.match('totalmiles'), 'miles');
+  assert.equal(sheets.match('irsmileagereimbursementrate'), null);
+});
+
+test('Staff Travel form with Minus miles + formula Total miles keeps the form math intact', async () => {
+  const wb0 = new ExcelJS.Workbook();
+  const s0 = wb0.addWorksheet('Sheet1');
+  ['Travel Date', 'Start Location', 'Finish Location', 'Reason for travel', 'Program', 'Odometer Start', 'Odometer Finish',
+    'Minus miles', 'Total miles', 'IRS Mileage Reimbursement Rate'].forEach((h, i) => { s0.getRow(3).getCell(i + 1).value = h; });
+  s0.getCell('J4').value = 0.76;
+  for (let r = 5; r <= 20; r++) {
+    s0.getCell('I' + r).value = { formula: `G${r}-F${r}-H${r}` };
+    s0.getCell('J' + r).value = { formula: `I${r}*$J$4` };
+  }
+  s0.getCell('E21').value = 'Subtotals';
+  s0.getCell('I21').value = { formula: 'SUM(I5:I20)' };
+  const tpl = Buffer.from(await wb0.xlsx.writeBuffer());
+  const layout = sheets.analyze(await sheets.openWorkbook(tpl));
+  assert.equal(layout.cols.miles, 9);          // "Total miles", not "Minus miles"
+  assert.equal(layout.dataStart, 5);           // the 0.760 rate row is skipped
+  assert.equal(layout.capacity, 16);
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(await sheets.fill(tpl, [trip(1, '2026-11-02', 'MDFT', 'Court', 31)], { firstName: 'J', sheetNumber: 1, sheetCount: 1 }));
+  const s = wb.worksheets[0];
+  assert.equal(s.getCell('F5').value, 1000);
+  assert.equal(s.getCell('G5').value, 1031);
+  assert.ok(!s.getCell('H5').value, 'Minus miles left blank');
+  assert.equal(s.getCell('I5').value.formula, 'G5-F5-H5');
+  assert.equal(s.getCell('J4').value, 0.76);
+});

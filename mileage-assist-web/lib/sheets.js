@@ -71,6 +71,8 @@ const norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 function match(n) {
   if (!n || n.length > 60) return null;
+  // Deductions ("Minus miles", "Less commute") are for the person to fill in, never the trip distance.
+  if (/^(minus|less|deduct|subtract|commute|personal|nonreimb)/.test(n) || /(deduct|commute|minus)/.test(n)) return null;
   if (EXACT[n]) return EXACT[n];
   const odo = n.includes('odometer') || n.includes('odo') || n.includes('reading');
   if (odo && (n.includes('start') || n.includes('begin'))) return 'odoStart';
@@ -196,10 +198,19 @@ function analyze(wb) {
         // Trips start below the heading block (and below any merged heading cells)...
         let dataStart = r + h;
         for (const col of Object.values(cols)) dataStart = Math.max(dataStart, bottomOf(ws, r, col) + 1);
-        // ...skipping up to 3 hint/sample rows that already hold values in the matched columns.
+        // ...skipping up to 3 hint/sample rows that already hold typed values anywhere across the table
+        // (formulas don't count: those belong to the form's data rows).
+        const colNums = Object.values(cols);
+        const from = Math.min(...colNums);
+        const to = Math.max(...colNums) + 6;
         for (let skip = 0; skip < 3; skip++) {
           const row = ws.getRow(dataStart);
-          if (!Object.values(cols).some((col) => hasValue(row.getCell(col)) || isMergedCopy(row.getCell(col)))) break;
+          let filled = false;
+          for (let col = from; col <= to && !filled; col++) {
+            const cell = row.getCell(col);
+            filled = hasValue(cell) || (isMergedCopy(cell) && cell.master.row < dataStart);
+          }
+          if (!filled) break;
           dataStart += 1;
         }
         bestScore = score;
@@ -388,6 +399,6 @@ async function zip(files) {
 }
 
 module.exports = {
-  csv, standardXlsx, fill, analyze, openWorkbook, describe, saveTemplate, loadTemplate, templateInfo, deleteTemplate, zip,
+  csv, standardXlsx, fill, analyze, match, openWorkbook, describe, saveTemplate, loadTemplate, templateInfo, deleteTemplate, zip,
   XLSX_TYPE, csvCell,
 };
