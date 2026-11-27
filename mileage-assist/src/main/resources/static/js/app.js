@@ -10,6 +10,7 @@
     const d = new Date();
     return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
   };
+  window.MA.todayISO = todayISO;
   const fmtDate = (iso) => new Date(iso + 'T00:00:00').toLocaleDateString(undefined,
     { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   const fmtMiles = (n) => Number(n).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -59,7 +60,9 @@
       document.querySelectorAll('.tab').forEach((t) => t.setAttribute('aria-selected', String(t === tab)));
       $('view-log').hidden = tab.dataset.view !== 'log';
       $('view-sheet').hidden = tab.dataset.view !== 'sheet';
+      $('view-dash').hidden = tab.dataset.view !== 'dash';
       if (tab.dataset.view === 'sheet') renderSheet();
+      if (tab.dataset.view === 'dash') window.Dashboard && window.Dashboard.show();
     });
   });
 

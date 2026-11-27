@@ -67,3 +67,12 @@ create table if not exists user_templates (
     content     blob         not null,
     uploaded_at timestamp    not null default current_timestamp
 );
+
+-- Reimbursement rate per mile. Each rate applies from its effective date onward,
+-- so changing the rate later never rewrites past reimbursements.
+create table if not exists user_rates (
+    user_id        bigint       not null references app_users(id) on delete cascade,
+    effective_date date         not null,
+    rate           decimal(7,4) not null,
+    primary key (user_id, effective_date)
+);

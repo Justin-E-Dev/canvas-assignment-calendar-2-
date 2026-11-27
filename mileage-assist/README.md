@@ -13,6 +13,11 @@ It uses no AI and no paid services at runtime: everything runs on your own serve
 - Organize the spreadsheet by any column (program, client, initials, date, ...), set how many
   rows go in each spreadsheet, and start a new spreadsheet for each group. Every spreadsheet has its
   own CSV / Excel buttons, plus "download all" as a .zip.
+- **Dashboard**: average weekly reimbursement, this week vs. average, weekly bar chart with an
+  average line, average weekly cost per program, share by day of week, and top clients.
+  The reimbursement rate per mile is editable at any time; each rate has an effective date so
+  changing it never rewrites past reimbursements. Charts are drawn in the app itself (no
+  third-party chart service), so trip data never leaves the server.
 - Upload your own Excel form as a **template**; downloads fill it in automatically (see below).
 - Installable on phones as a home-screen app (web app manifest).
 

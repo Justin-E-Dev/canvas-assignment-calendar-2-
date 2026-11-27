@@ -41,6 +41,10 @@
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2ZM9 19H5v-3h4v3Zm0-5H5v-3h4v3Zm0-5H5V5h4v4Zm10 10h-8v-3h8v3Zm0-5h-8v-3h8v3Zm0-5h-8V5h8v4Z"/></svg>
     Spreadsheet
   </button>
+  <button class="tab" role="tab" data-view="dash" aria-selected="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h8V3H3v10Zm0 8h8v-6H3v6Zm10 0h8V11h-8v10Zm0-18v6h8V3h-8Z"/></svg>
+    Dashboard
+  </button>
 </nav>
 
 <main>
@@ -187,9 +191,81 @@
       <p class="empty" id="sheet-empty" hidden>No trips yet. Log your first trip from the Daily Log tab.</p>
     </div>
   </section>
+  <section id="view-dash" hidden>
+    <div class="dash-head">
+      <div>
+        <h2>Reimbursement dashboard</h2>
+        <p class="sub" id="d-sub">Weekly reimbursements at your rate per mile.</p>
+      </div>
+      <div class="field">
+        <label for="d-range">Time range</label>
+        <select id="d-range">
+          <option value="4">Last 4 weeks</option>
+          <option value="12" selected>Last 12 weeks</option>
+          <option value="26">Last 26 weeks</option>
+          <option value="52">Last 52 weeks</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="card rate-card">
+      <form id="rate-form" class="rate-form" novalidate>
+        <div class="field">
+          <label for="r-rate">Reimbursement rate (per mile)</label>
+          <div class="money-input"><span>$</span><input id="r-rate" type="number" inputmode="decimal" min="0.01" max="10" step="0.001" placeholder="0.700" required></div>
+        </div>
+        <div class="field">
+          <label for="r-date">Effective from</label>
+          <input id="r-date" type="date" required>
+        </div>
+        <button class="btn btn-primary" type="submit">Save rate</button>
+      </form>
+      <p class="hint" id="r-help">A new rate applies to trips on or after its date, so past reimbursements keep the rate they were earned at.</p>
+      <ul class="rate-list" id="r-list"></ul>
+    </div>
+
+    <div id="d-norate" class="card notice" hidden>Set your reimbursement rate above to see dollar amounts.</div>
+
+    <div id="d-body">
+      <div class="kpis">
+        <div class="kpi kpi-hero"><span class="kpi-label">Average weekly reimbursement</span><strong id="k-avg">–</strong><span class="kpi-foot" id="k-avg-foot"></span></div>
+        <div class="kpi"><span class="kpi-label">This week so far</span><strong id="k-week">–</strong><span class="kpi-foot" id="k-week-foot"></span></div>
+        <div class="kpi"><span class="kpi-label">Average weekly miles</span><strong id="k-miles">–</strong><span class="kpi-foot" id="k-miles-foot"></span></div>
+        <div class="kpi"><span class="kpi-label">Total in range</span><strong id="k-total">–</strong><span class="kpi-foot" id="k-total-foot"></span></div>
+      </div>
+
+      <div class="card chart-card">
+        <h3>Weekly reimbursements</h3>
+        <p class="chart-sub">Each bar is one week (Mon–Sun). The dashed line is your weekly average.</p>
+        <div class="chart" id="c-weekly"></div>
+        <details class="data-table"><summary>Show as table</summary><div id="t-weekly"></div></details>
+      </div>
+
+      <div class="chart-grid">
+        <div class="card chart-card">
+          <h3>Average weekly reimbursement by program</h3>
+          <p class="chart-sub">What each program costs in a typical week, and its share of the total.</p>
+          <div class="chart" id="c-program"></div>
+        </div>
+        <div class="card chart-card">
+          <h3>Reimbursement by day of week</h3>
+          <p class="chart-sub">Share of the total reimbursed on each weekday.</p>
+          <div class="chart" id="c-weekday"></div>
+        </div>
+      </div>
+
+      <div class="card chart-card">
+        <h3>Top clients</h3>
+        <p class="chart-sub">Clients (end locations) that account for the most reimbursement in this range.</p>
+        <div class="chart" id="c-clients"></div>
+      </div>
+    </div>
+    <div class="chart-tip" id="chart-tip" role="tooltip" hidden></div>
+  </section>
 </main>
 <script src="/js/common.js"></script>
 <script src="/js/webauthn.js"></script>
 <script src="/js/app.js"></script>
+<script src="/js/dashboard.js"></script>
 </body>
 </html>
