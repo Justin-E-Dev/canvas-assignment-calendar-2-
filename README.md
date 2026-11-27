@@ -55,3 +55,12 @@ The site is hosted on [Vercel](https://vercel.com) and connected to this GitHub 
 | `learn.js` | The Learning Center tab (class cards and book search) |
 | `api/feed.js` | Runs on Vercel and downloads the Canvas feed for the page |
 | `server.py` | Optional: runs the site on your own computer for testing (`python server.py`) |
+
+## Sync between devices
+
+Books, Gemini notes, check-offs, time estimates and quiz scores sync between your
+computer and phone through a free Upstash Redis database (`api/sync.js`, `sync.js`).
+Set it up once in Vercel: **Storage → Create Database → Upstash for Redis (free)**,
+connect it to this project, then redeploy. Vercel adds the database's URL and token
+as environment variables automatically. Without it, everything still works, but
+each device keeps its own copy. The Canvas feed link is never synced.

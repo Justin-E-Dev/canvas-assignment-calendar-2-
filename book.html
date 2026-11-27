@@ -9,6 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="book.css">
   <script src="theme.js"></script>
+  <script src="sync.js"></script>
 </head>
 <body>
   <div class="shell">
@@ -47,11 +48,11 @@
         </div>
         <button id="regenBtn" class="top-btn hidden" type="button" title="Delete what Gemini wrote for this chapter and write it again">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
-          Regenerate chapter
+          <span class="long">Regenerate chapter</span><span class="short">Redo chapter</span>
         </button>
         <button id="regenAllBtn" class="top-btn hidden" type="button" title="Write every chapter of this book again, one after another">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h11M4 12h11M4 18h7"/><path d="M20 13a5 5 0 1 1-1.5-3.6"/><path d="M20 7v3h-3"/></svg>
-          <span>Regenerate all</span>
+          <span class="long">Regenerate all</span><span class="short">Redo all</span>
         </button>
         <button class="top-theme" type="button" data-theme-btn>Auto mode</button>
         <label class="mobile-chapter">

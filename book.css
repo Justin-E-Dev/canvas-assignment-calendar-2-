@@ -524,7 +524,20 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .side-nav button.writing .ch-num { animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .side-nav button.writing .ch-num { animation: none; } }
-@media (max-width: 900px) { .top-btn span { display: none; } }
+.top-btn .short { display: none; }
+@media (max-width: 900px) {
+  .top-btn { padding: 8px 10px; font-size: 0.8rem; gap: 6px; }
+  .top-btn .long { display: none; }
+  .top-btn .short { display: inline; }
+}
+/* Phones: title on top, then the buttons side by side, then the chapter list */
+@media (max-width: 480px) {
+  .topbar { flex-direction: row; flex-wrap: wrap; gap: 8px; }
+  .topbar-text { flex: 1 0 100%; }
+  .topbar .top-btn { flex: 1 1 0; min-width: 0; }
+  .topbar .top-btn.hidden { display: none; }
+  .topbar .mobile-chapter { flex: 1 0 100%; }
+}
 
 /* Search inside the notes */
 .notes-search {

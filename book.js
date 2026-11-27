@@ -424,7 +424,16 @@
   // Keeps going round by round until Gemini says it's done. Returns the full text.
   //   start: text already written (to continue), onText(fullText): called as text arrives,
   //   onWait(message): called while waiting to retry.
-  async function streamAll(payload, { start = "", onText, onWait } = {}) {
+  // While Gemini is writing, device sync (sync.js) waits instead of reloading the page.
+  async function streamAll(...args) {
+    window.cacBusy = (window.cacBusy || 0) + 1;
+    try {
+      return await streamAllInner(...args);
+    } finally {
+      window.cacBusy--;
+    }
+  }
+  async function streamAllInner(payload, { start = "", onText, onWait } = {}) {
     let text = start;
     let retries = 0;
     for (let round = 0; round < 15; round++) {
@@ -976,7 +985,9 @@
   }
 
   function bulkLabel(text) {
-    $("regenAllBtn").querySelector("span").textContent = text;
+    $("regenAllBtn").querySelector(".long").textContent = text;
+    $("regenAllBtn").querySelector(".short").textContent = text === "Regenerate all" ? "Redo all"
+      : text.replace(/^Writing (\d+ of \d+).*/, "$1 · Stop").replace(/^Stopping.*/, "Stopping…");
   }
 
   async function regenerateAll() {
@@ -988,6 +999,7 @@
     const total = entry.chapters.length;
     if (!confirm(`Regenerate all ${total} chapters? Gemini will write each chapter again, one after another (about 1-3 minutes each). Finished chapters are saved as it goes; you can keep reading while it works.${entry.generated ? "" : " Each chapter's original notes can be brought back with the link under its notes."}`)) return;
     Object.assign(bulk, { running: true, stop: false, at: null, queue: entry.chapters.map((_, i) => i) });
+    window.cacBusy = (window.cacBusy || 0) + 1;
     $("regenBtn").disabled = true;
     const failed = [];
     let stoppedFor = "";
@@ -1013,6 +1025,7 @@
       }
     }
     Object.assign(bulk, { running: false, at: null, queue: [] });
+    window.cacBusy--;
     $("regenBtn").disabled = false;
     markWritten();
     bulkLabel("Regenerate all");
