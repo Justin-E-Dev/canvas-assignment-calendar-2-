@@ -1,5 +1,19 @@
 {
   "functions": {
-    "api/gemini.js": { "maxDuration": 60 }
-  }
+    "api/gemini.js": {
+      "maxDuration": 60
+    }
+  },
+  "redirects": [
+    {
+      "source": "/mileage-assist-web/:path*",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/mileage-assist-web",
+      "destination": "/",
+      "permanent": false
+    }
+  ]
 }
