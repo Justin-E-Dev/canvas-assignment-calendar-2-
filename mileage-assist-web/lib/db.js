@@ -81,8 +81,25 @@ create table if not exists challenges (
 );
 `;
 
+/** Vercel's Neon integration may name the variable with a prefix (e.g. STORAGE_DATABASE_URL). */
+function databaseUrl() {
+  const env = process.env;
+  if (env.DATABASE_URL) return env.DATABASE_URL;
+  if (env.POSTGRES_URL) return env.POSTGRES_URL;
+  const key = Object.keys(env).sort().find((k) => /(^|_)(DATABASE_URL|POSTGRES_URL)$/.test(k) && /^postgres(ql)?:\/\//.test(env[k]));
+  if (key) return env[key];
+  if (env.PGHOST && env.PGUSER && env.PGDATABASE) {
+    const u = new URL('postgresql://' + env.PGHOST);
+    u.username = env.PGUSER;
+    u.password = env.PGPASSWORD || '';
+    u.pathname = '/' + env.PGDATABASE;
+    return u.toString();
+  }
+  return null;
+}
+
 function connectionConfig() {
-  const url = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+  const url = databaseUrl();
   if (!url) {
     throw Object.assign(new Error('the database isn\'t connected. In Vercel: Storage → Create Database → Neon, connect it to this project, then redeploy.'), { setup: true });
   }
