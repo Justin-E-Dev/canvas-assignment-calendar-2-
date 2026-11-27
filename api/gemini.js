@@ -117,33 +117,44 @@ class GeminiError extends Error {
   }
 }
 
-async function callModel(model, action, text, deadline) {
-  const timeLeft = deadline - Date.now();
+// Keep "thinking" short: it's slow, and chapter lists and notes don't need much.
+// Gemini 2.5 models take a thinking budget; newer models take a thinking level.
+const thinkingFor = (model) => (/2\.5/.test(model) ? { thinkingBudget: 0 } : { thinkingLevel: "low" });
+
+async function callModel(model, action, text, deadline, opts = {}) {
+  const perModel = action === "chapters" ? 25000 : 50000; // one slow model can't use up all the time
+  const timeLeft = Math.min(perModel, deadline - Date.now());
   if (timeLeft < 3000) throw new GeminiError(504, "Ran out of time", "timeout");
+  const generationConfig = {
+    responseMimeType: "application/json",
+    responseSchema: SCHEMAS[action],
+    temperature: 0.4,
+    maxOutputTokens: opts.maxOutputTokens || 16384,
+  };
+  if (!opts.noThinkingConfig) generationConfig.thinkingConfig = thinkingFor(model);
   let res;
   try {
     res = await fetch(`${API}/${encodeURIComponent(model)}:generateContent`, {
-    signal: AbortSignal.timeout(timeLeft),
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: SYSTEM }] },
-      contents: [{ role: "user", parts: [{ text }] }],
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: SCHEMAS[action],
-        temperature: 0.4,
-        maxOutputTokens: 16384,
-      },
-    }),
-  });
+      signal: AbortSignal.timeout(timeLeft),
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: SYSTEM }] },
+        contents: [{ role: "user", parts: [{ text }] }],
+        generationConfig,
+      }),
+    });
   } catch (e) {
-    if (e && (e.name === "TimeoutError" || e.name === "AbortError")) throw new GeminiError(504, "Gemini took too long", "timeout");
+    if (e && (e.name === "TimeoutError" || e.name === "AbortError")) throw new GeminiError(504, `${model} took too long`, "timeout");
     throw new GeminiError(502, `Couldn't reach Gemini: ${e && e.message}`, "other");
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = (data.error && data.error.message) || `HTTP ${res.status}`;
+    // This model doesn't accept the thinking setting: ask again without it.
+    if (res.status === 400 && /thinking/i.test(msg) && !opts.noThinkingConfig) {
+      return callModel(model, action, text, deadline, { ...opts, noThinkingConfig: true });
+    }
     // Model missing, renamed or not offered on the free tier: try the next one.
     if (res.status === 404 || (res.status === 400 && /model|not supported|not found/i.test(msg)) ||
         (res.status === 429 && /limit:\s*0\b|free_tier.*limit.*\b0\b/i.test(msg))) {
@@ -152,10 +163,11 @@ async function callModel(model, action, text, deadline) {
     if (res.status === 429) throw new GeminiError(429, msg, "quota");
     if (res.status === 400 && /api key/i.test(msg)) throw new GeminiError(401, msg, "key");
     if (res.status === 403) throw new GeminiError(403, msg, "key");
+    if (res.status >= 500) throw new GeminiError(503, msg, "busy");
     throw new GeminiError(502, msg, "other");
   }
   const cand = (data.candidates || [])[0];
-  const out = cand && cand.content && (cand.content.parts || []).map((p) => p.text || "").join("");
+  const out = cand && cand.content && (cand.content.parts || []).filter((p) => !p.thought).map((p) => p.text || "").join("");
   if (!out) {
     const reason = (cand && cand.finishReason) || (data.promptFeedback && data.promptFeedback.blockReason) || "empty answer";
     throw new GeminiError(502, `Gemini returned no text (${reason})`, "other");
@@ -163,9 +175,40 @@ async function callModel(model, action, text, deadline) {
   return JSON.parse(out);
 }
 
+// Ask Google which Flash models this key can use, so we only try real ones.
+let keyModels = null;
+async function modelsForKey() {
+  if (keyModels) return keyModels;
+  try {
+    const res = await fetch(`${API}?pageSize=200`, { headers: { "x-goog-api-key": process.env.GEMINI_API_KEY }, signal: AbortSignal.timeout(6000) });
+    if (!res.ok) return null;
+    const names = ((await res.json()).models || [])
+      .filter((m) => /flash/i.test(m.name) && (m.supportedGenerationMethods || []).includes("generateContent"))
+      .map((m) => m.name.replace(/^models\//, ""));
+    if (names.length) keyModels = names;
+  } catch {
+    /* fall back to the built-in list */
+  }
+  return keyModels;
+}
+
+// Our preferred models that this key has, then any other plain Flash model it has (newest first).
+async function modelOrder() {
+  const available = await modelsForKey();
+  if (!available) return MODELS;
+  const version = (n) => parseFloat((n.match(/(\d+(?:\.\d+)?)/) || [0, 0])[1]);
+  const preferred = MODELS.filter((m) => m === process.env.GEMINI_MODEL || available.includes(m));
+  const extra = available
+    .filter((n) => !preferred.includes(n) && !/lite|image|tts|audio|live|exp|preview|thinking/i.test(n))
+    .sort((x, y) => version(y) - version(x));
+  const order = [...preferred, ...extra];
+  return order.length ? order : MODELS;
+}
+
 async function ask(action, text) {
   const deadline = Date.now() + 55000; // Vercel stops the function at 60 s
-  const order = workingModel ? [workingModel, ...MODELS.filter((m) => m !== workingModel)] : MODELS;
+  const base = workingModel ? [workingModel] : [];
+  const order = [...new Set([...base, ...(await modelOrder())])];
   let last;
   for (const model of order) {
     try {
@@ -174,10 +217,44 @@ async function ask(action, text) {
       return { result, model };
     } catch (err) {
       last = err;
-      if (!(err instanceof GeminiError) || err.kind !== "model") throw err;
+      if (!(err instanceof GeminiError)) throw err;
+      // Unavailable, too slow or overloaded: try the next model if there's time.
+      if (!["model", "timeout", "busy"].includes(err.kind)) throw err;
+      if (deadline - Date.now() < 8000) break;
     }
   }
   throw last || new GeminiError(502, "No Gemini model available", "other");
+}
+
+// ---------- Diagnostics: open /api/gemini in a browser ----------
+// Shows which models the key can use and how fast each answers. Never shows the key.
+async function diagnose() {
+  const report = { keySet: !!process.env.GEMINI_API_KEY, checkedAt: new Date().toISOString() };
+  if (!report.keySet) return { ...report, advice: "GEMINI_API_KEY isn't set in Vercel (or the site wasn't redeployed after adding it)." };
+  try {
+    const res = await fetch(`${API}?pageSize=200`, { headers: { "x-goog-api-key": process.env.GEMINI_API_KEY }, signal: AbortSignal.timeout(10000) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ...report, listModelsError: (data.error && data.error.message) || `HTTP ${res.status}` };
+    report.flashModelsForThisKey = (data.models || [])
+      .filter((m) => /flash/i.test(m.name) && (m.supportedGenerationMethods || []).includes("generateContent"))
+      .map((m) => m.name.replace(/^models\//, ""));
+  } catch (e) {
+    return { ...report, listModelsError: String(e && e.message) };
+  }
+  report.tests = [];
+  const deadline = Date.now() + 50000;
+  for (const model of MODELS) {
+    if (deadline - Date.now() < 5000) break;
+    const t0 = Date.now();
+    try {
+      await callModel(model, "chapters", 'Return {"recognized":false,"edition":"test","note":"ok","chapters":[{"number":"1","title":"Test"}]}.', Math.min(deadline, Date.now() + 15000), { maxOutputTokens: 256 });
+      report.tests.push({ model, ok: true, ms: Date.now() - t0 });
+      break; // found a working one
+    } catch (e) {
+      report.tests.push({ model, ok: false, ms: Date.now() - t0, problem: e.kind || "error", detail: String(e.message).slice(0, 160) });
+    }
+  }
+  return report;
 }
 
 // ---------- Cleaning up the answer ----------
@@ -194,8 +271,12 @@ function cleanStudy(s) {
 }
 
 module.exports = async function handler(req, res) {
+  if (req.method === "GET") {
+    res.setHeader("Cache-Control", "no-store");
+    return res.status(200).json(await diagnose());
+  }
   if (req.method !== "POST") {
-    res.setHeader("Allow", "POST");
+    res.setHeader("Allow", "GET, POST");
     return res.status(405).json({ error: "Use POST" });
   }
   // Only this website's own pages may use it.
@@ -244,6 +325,9 @@ module.exports = async function handler(req, res) {
     if (err instanceof GeminiError) {
       if (err.kind === "timeout") {
         return res.status(504).json({ error: "Gemini took too long to answer. Please try again; it's usually faster the second time." });
+      }
+      if (err.kind === "busy") {
+        return res.status(503).json({ error: "Gemini is busy right now. Please try again in a minute." });
       }
       if (err.kind === "quota") {
         return res.status(429).json({ error: "Gemini's free limit is used up for now. Wait a minute (or until tomorrow if it's the daily limit) and try again." });
