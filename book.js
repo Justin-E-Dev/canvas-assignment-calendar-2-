@@ -338,49 +338,163 @@
   // ---------- Asking Gemini (through this website's own server function) ----------
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  // Ask Gemini; if the free per-minute limit is hit, wait and try again (up to 4 times).
-  async function gemini(payload, onWait) {
-    for (let attempt = 0; ; attempt++) {
-      try {
-        return await geminiOnce(payload);
-      } catch (err) {
-        if (!err.retryAfter || attempt >= 4) throw err;
-        if (onWait) onWait(err.retryAfter);
-        await sleep(err.retryAfter * 1000);
-      }
-    }
-  }
+  // ---------- Talking to Gemini (through this website's own server function) ----------
+  // Every request streams text back and stops after 45 s; streamAll keeps asking
+  // Gemini to continue until the answer is complete, retrying temporary problems.
+  const MODEL_KEY = "cac.geminiModel";
+  const modelMemory = load(MODEL_KEY, {}); // { prefer: "fast model", avoid: ["slow models"], at }
+  if (modelMemory.at && Date.now() - modelMemory.at > 6 * 3600 * 1000) modelMemory.avoid = []; // forget slow models after 6 h
 
-  async function geminiOnce(payload) {
+  async function streamOnce(payload, onText) {
     let res;
     try {
       res = await fetch("/api/gemini", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payload, book: { ...book, course } }),
-        signal: AbortSignal.timeout(305000), // the server gives up at 5 minutes
+        body: JSON.stringify({ ...payload, book: { ...book, course }, prefer: modelMemory.prefer, avoid: modelMemory.avoid || [] }),
+        signal: AbortSignal.timeout(65000),
       });
     } catch (e) {
-      throw new Error(e && e.name === "TimeoutError"
-        ? "Gemini took too long to answer. Please try again."
-        : "Couldn't reach the website. Check your internet connection.");
-    }
-    let data = null;
-    try {
-      data = await res.json();
-    } catch {
-      /* not JSON */
-    }
-    if (!res.ok) {
-      const err = new Error((data && data.error) || {
-        404: "Automatic notes only work on the live website.",
-        504: "Gemini took too long to answer. Please try again.",
-      }[res.status] || `Something went wrong (error ${res.status}).`);
-      err.setup = !!(data && data.setup);
-      if (res.status === 429 && data && data.retryAfter) err.retryAfter = data.retryAfter;
+      const err = new Error(e && e.name === "TimeoutError" ? "Gemini didn't answer in time." : "Couldn't reach the website. Check your internet connection.");
+      err.retryAfter = 5;
       throw err;
     }
-    return data;
+    if (!res.ok || !res.body) {
+      let data = null;
+      try {
+        data = await res.json();
+      } catch {
+        /* not JSON */
+      }
+      const err = new Error((data && data.error) || (res.status === 404 ? "Automatic notes only work on the live website." : `Something went wrong (error ${res.status}).`));
+      err.setup = !!(data && data.setup);
+      if (data && data.retryAfter) err.retryAfter = data.retryAfter;
+      else if (res.status === 504 || res.status >= 500) err.retryAfter = 5;
+      throw err;
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      let chunk;
+      try {
+        chunk = await reader.read();
+      } catch {
+        return "more"; // connection dropped: keep what we have and continue
+      }
+      if (chunk.done) return "more";
+      buf += decoder.decode(chunk.value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line) continue;
+        let ev;
+        try {
+          ev = JSON.parse(line);
+        } catch {
+          continue;
+        }
+        if (ev.model && (ev.done || ev.more)) {
+          modelMemory.prefer = ev.model;
+          modelMemory.at = Date.now();
+          save(MODEL_KEY, modelMemory);
+        }
+        if (ev.t) onText(ev.t);
+        if (ev.done) return "done";
+        if (ev.more) return "more";
+        if (ev.error) {
+          if (Array.isArray(ev.avoid)) {
+            modelMemory.avoid = ev.avoid;
+            if (ev.avoid.includes(modelMemory.prefer)) delete modelMemory.prefer;
+            modelMemory.at = Date.now();
+            save(MODEL_KEY, modelMemory);
+          }
+          const err = new Error(ev.error);
+          err.retryAfter = ev.retryAfter;
+          err.setup = !!ev.setup;
+          throw err;
+        }
+      }
+    }
+  }
+
+  // Keeps going round by round until Gemini says it's done. Returns the full text.
+  //   start: text already written (to continue), onText(fullText): called as text arrives,
+  //   onWait(message): called while waiting to retry.
+  async function streamAll(payload, { start = "", onText, onWait } = {}) {
+    let text = start;
+    let retries = 0;
+    for (let round = 0; round < 15; round++) {
+      let status;
+      try {
+        status = await streamOnce({ ...payload, soFar: text }, (t) => {
+          text += t;
+          if (onText) onText(text);
+        });
+        retries = 0;
+      } catch (err) {
+        if (!err.retryAfter || retries >= 6) throw err;
+        retries++;
+        if (onWait) onWait(`${err.message} Trying again in ${err.retryAfter}s…`);
+        await sleep(err.retryAfter * 1000);
+        continue;
+      }
+      if (status === "done") return text;
+      if (onWait && text) onWait("Continuing…");
+    }
+    return text;
+  }
+
+  // ---------- Reading Gemini's line formats ----------
+  const lineValue = (text, key) => {
+    const m = text.match(new RegExp(`^\\s*${key}:\\s*(.+)$`, "im"));
+    return m ? m[1].trim() : "";
+  };
+  const fields = (line, n) => {
+    const parts = line.split("|").map((x) => x.trim());
+    if (parts.length > n) parts.splice(n - 1, parts.length, parts.slice(n - 1).join(" | "));
+    return parts;
+  };
+  const linesOf = (text, key) => [...text.matchAll(new RegExp(`^\\s*\\**${key}:\\**\\s*(.+)$`, "gim"))].map((m) => m[1].trim());
+
+  function parseChapters(text) {
+    const chapters = linesOf(text, "CHAPTER").map((l) => fields(l, 2))
+      .map(([number, title]) => ({ number: (number || "").replace(/^chapter\s*/i, ""), title: title || "" }))
+      .filter((c) => c.number && c.title);
+    return { chapters, edition: lineValue(text, "EDITION"), note: lineValue(text, "NOTE"), recognized: /^y/i.test(lineValue(text, "KNOWN")) };
+  }
+  function parseOutline(text) {
+    const sections = linesOf(text, "SECTION").map((l) => fields(l, 3))
+      .map(([number, title, focus]) => ({ number: number || "", title: title || "", focus: focus || "" }))
+      .filter((x) => x.title);
+    return { intro: lineValue(text, "INTRO"), sections };
+  }
+  // Only complete lines count while text is still arriving.
+  const completeLines = (text, done) => (done ? text : text.slice(0, text.lastIndexOf("\n") + 1));
+  function parseConcepts(text, done) {
+    return linesOf(completeLines(text, done), "CONCEPT").map((l) => fields(l, 2))
+      .map(([title, body]) => ({ title, text: body || "" })).filter((k) => k.title && k.text);
+  }
+  function parseCards(text, done) {
+    return linesOf(completeLines(text, done), "CARD").map((l) => fields(l, 2))
+      .map(([front, back]) => ({ front, back: back || "" })).filter((c) => c.front && c.back);
+  }
+  function parseQuiz(text) {
+    const out = [];
+    for (const block of text.split(/\n\s*\n|(?=^\s*\**Q:)/m)) {
+      const q = lineValue(block, "\\**Q\\**");
+      const opts = ["A", "B", "C", "D"].map((L) => {
+        const m = block.match(new RegExp(`^\\s*\\**${L}[).:]\\**\\s*(.+)$`, "m"));
+        return m ? m[1].trim() : "";
+      });
+      const ans = (lineValue(block, "\\**ANSWER\\**").match(/[ABCD]/i) || [""])[0].toUpperCase();
+      const why = lineValue(block, "\\**WHY\\**");
+      if (q && opts.every(Boolean) && new Set(opts).size === 4 && ans) {
+        out.push({ q, options: opts, answer: "ABCD".indexOf(ans), explain: why || "" });
+      }
+    }
+    return out;
   }
 
   const SETUP_HELP = `<p class="tiny">One-time setup: get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>,
@@ -484,70 +598,6 @@
     return `# Chapter ${ch.number}: ${ch.title}\n\n${c.outline.intro}\n\n${parts.join("\n\n")}`;
   }
 
-  // One streamed request: calls onText for each piece; returns "done" or "more".
-  async function streamOnce(payload, onText) {
-    let res;
-    try {
-      res = await fetch("/api/gemini", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payload, action: "stream", book: { ...book, course } }),
-        signal: AbortSignal.timeout(65000),
-      });
-    } catch (e) {
-      const err = new Error(e && e.name === "TimeoutError" ? "Gemini didn't answer in time." : "Couldn't reach the website. Check your internet connection.");
-      err.retryAfter = 5;
-      throw err;
-    }
-    if (!res.ok || !res.body) {
-      let data = null;
-      try {
-        data = await res.json();
-      } catch {
-        /* not JSON */
-      }
-      const err = new Error((data && data.error) || (res.status === 404 ? "Automatic notes only work on the live website." : `Something went wrong (error ${res.status}).`));
-      err.setup = !!(data && data.setup);
-      if (data && data.retryAfter) err.retryAfter = data.retryAfter;
-      else if (res.status === 504 || res.status >= 500) err.retryAfter = 5;
-      throw err;
-    }
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = "";
-    for (;;) {
-      let chunk;
-      try {
-        chunk = await reader.read();
-      } catch {
-        return "more"; // connection dropped: keep what we have and continue
-      }
-      if (chunk.done) return "more";
-      buf += decoder.decode(chunk.value, { stream: true });
-      let nl;
-      while ((nl = buf.indexOf("\n")) >= 0) {
-        const line = buf.slice(0, nl).trim();
-        buf = buf.slice(nl + 1);
-        if (!line) continue;
-        let ev;
-        try {
-          ev = JSON.parse(line);
-        } catch {
-          continue;
-        }
-        if (ev.t) onText(ev.t);
-        if (ev.done) return "done";
-        if (ev.more) return "more";
-        if (ev.error) {
-          const err = new Error(ev.error);
-          err.retryAfter = ev.retryAfter;
-          err.setup = !!ev.setup;
-          throw err;
-        }
-      }
-    }
-  }
-
   async function writeNotes(ch, token) {
     const c = chapterStore(ch);
     const live = () => token === showToken;
@@ -560,9 +610,16 @@
         $("notesBody").innerHTML = waiting(`Gemini is outlining Chapter ${esc(ch.number)}…`);
         $("sectionJump").classList.add("hidden");
       }
-      c.outline = await gemini({ action: "outline", chapter: ch }, (secs) => {
-        if (live()) $("notesBody").innerHTML = waiting(`Waiting ${secs}s for Gemini, then trying again…`);
+      const outlineText = await streamAll({ action: "outline", chapter: ch }, {
+        onText: (t) => {
+          const intro = lineValue(t, "INTRO");
+          if (live() && intro) $("notesBody").innerHTML = `<section class="note-section intro"><p>${inline(intro)}</p></section>` + waiting("Gemini is outlining the sections…");
+        },
+        onWait: (msg) => { if (live()) $("notesBody").innerHTML = waiting(esc(msg)); },
       });
+      const outline = parseOutline(outlineText);
+      if (!outline.sections.length) throw Object.assign(new Error("Gemini couldn't outline this chapter."), { retry: true });
+      c.outline = outline;
       c.sections = {};
       c.partial = {};
       saveGen();
@@ -607,36 +664,30 @@
         const el = block(n);
         if (el) el.innerHTML = waiting(`Writing ${secName(n)}…`);
       }
-      let retries = 0;
       try {
-        for (let round = 0; round < 12; round++) {
-          let status;
-          try {
-            status = await streamOnce({ chapter: ch, section: secs[n], allSections: all, soFar: text }, (t) => {
-              text += t;
-              c.partial[n] = text;
-              if (Date.now() - lastPaint > 250) {
-                lastPaint = Date.now();
-                paint("Writing…");
-                saveGen();
-              }
-            });
-          } catch (err) {
-            if (!err.retryAfter || retries >= 5) throw err;
-            retries++;
-            paint(`${esc(err.message)} Trying again in ${err.retryAfter}s…`);
-            if (!text) {
-              const el = block(n);
-              if (el) el.innerHTML = waiting(`${esc(err.message)} Trying again in ${err.retryAfter}s…`);
+        text = await streamAll({ action: "section", chapter: ch, section: secs[n], allSections: all }, {
+          start: text,
+          onText: (t) => {
+            text = t;
+            c.partial[n] = text;
+            if (Date.now() - lastPaint > 250) {
+              lastPaint = Date.now();
+              paint("Writing…");
+              saveGen();
             }
-            await sleep(err.retryAfter * 1000);
-            continue;
-          }
-          c.partial[n] = text;
-          saveGen();
-          if (status === "done") break;
-          paint("Continuing…");
-        }
+          },
+          onWait: (msg) => {
+            c.partial[n] = text;
+            saveGen();
+            if (text) paint(esc(msg));
+            else {
+              const el = block(n);
+              if (el) el.innerHTML = waiting(esc(msg));
+            }
+          },
+        });
+        c.partial[n] = text;
+        saveGen();
         if (!text.replace(/^\s*#{1,3}\s[^\n]*\n?/, "").trim()) throw new Error("Gemini didn't write anything for this section.");
         c.sections[n] = tidySection(text, secs[n]);
         delete c.partial[n];
@@ -668,41 +719,48 @@
     }
   }
 
-  // Key concepts, flashcards and quiz: three smaller requests, each shown when ready.
+  // Key concepts, flashcards and quiz: three separate streamed requests, each shown as it arrives.
   async function writeStudy(ch, token) {
     const c = chapterStore(ch);
     const live = () => token === showToken;
     c.study ||= {};
     const parts = [
-      ["concepts", "keyConcepts", "key concepts", (v) => renderConcepts(v)],
-      ["flashcards", "flashcards", "flashcards", (v) => renderCards(v)],
-      ["quiz", "quiz", "quiz", (v) => renderQuiz(v, ch)],
+      { part: "concepts", key: "keyConcepts", label: "key concepts", parse: parseConcepts, show: (v) => renderConcepts(v) },
+      { part: "flashcards", key: "flashcards", label: "flashcards", parse: parseCards, show: (v) => renderCards(v) },
+      { part: "quiz", key: "quiz", label: "quiz", parse: (t) => parseQuiz(t), show: (v) => renderQuiz(v, ch) },
     ];
-    for (const [part, key, label] of parts) {
-      if (live()) PANEL[part](c.study[key] ? "" : waiting(`Waiting to write the ${label}…`));
-    }
-    for (const [part, key, label, show] of parts) {
-      if (c.study[key]) {
-        if (live()) show(c.study[key]);
+    for (const p of parts) if (live() && !c.study[p.key]) PANEL[p.part](waiting(`Waiting to write the ${p.label}…`));
+    for (const p of parts) {
+      if (c.study[p.key]) {
+        if (live()) p.show(c.study[p.key]);
         continue;
       }
-      if (live()) PANEL[part](waiting(`Gemini is writing the ${label}…`));
+      if (live()) PANEL[p.part](waiting(`Gemini is writing the ${p.label}…`));
       try {
-        const out = await gemini({ action: "study", part, chapter: ch }, (secs) => {
-          if (live()) PANEL[part](waiting(`Waiting ${secs}s for Gemini, then trying again…`));
+        let lastPaint = 0;
+        const text = await streamAll({ action: p.part, chapter: ch }, {
+          onText: (t) => {
+            if (!live() || Date.now() - lastPaint < 300) return;
+            lastPaint = Date.now();
+            const so = p.parse(t, false);
+            if (!so.length) return;
+            if (p.part === "concepts") renderConcepts(so);
+            else PANEL[p.part](waiting(`Gemini is writing the ${p.label}… (${so.length} so far)`));
+          },
+          onWait: (msg) => { if (live()) PANEL[p.part](waiting(esc(msg))); },
         });
-        if (!out[key] || !out[key].length) throw new Error(`Gemini didn't write any ${label}.`);
-        c.study[key] = out[key];
+        const list = p.parse(text, true);
+        if (!list.length) throw new Error(`Gemini didn't write any ${p.label}.`);
+        c.study[p.key] = list;
         saveGen();
-        if (live()) show(out[key]);
+        if (live()) p.show(list);
       } catch (err) {
         if (live()) {
-          PANEL[part](errorHtml(err) + `<p><button class="pill-btn study-retry" type="button">Retry</button></p>`);
-          const btn = document.querySelector(".study-retry:not([data-bound])");
-          if (btn) {
+          PANEL[p.part](errorHtml(err) + `<p><button class="pill-btn study-retry" type="button">Retry</button></p>`);
+          document.querySelectorAll(".study-retry:not([data-bound])").forEach((btn) => {
             btn.dataset.bound = "1";
             btn.onclick = () => writeStudy(ch, showToken);
-          }
+          });
         }
       }
     }
@@ -807,8 +865,10 @@
         if (ol.length) {
           Object.assign(g, { chapters: ol, note: "Chapter list from Open Library.", edition: book.title });
         } else {
-          const data = await gemini({ action: "chapters" });
-          if (!data.chapters || !data.chapters.length) throw new Error("Gemini couldn't come up with a chapter list for this book.");
+          const data = parseChapters(await streamAll({ action: "chapters" }, {
+            onWait: (msg) => { $("notesBody").innerHTML = waiting(esc(msg)); },
+          }));
+          if (!data.chapters.length) throw new Error("Gemini couldn't come up with a chapter list for this book.");
           Object.assign(g, { chapters: data.chapters, note: data.note, edition: data.edition, recognized: data.recognized });
         }
         saveGen();
