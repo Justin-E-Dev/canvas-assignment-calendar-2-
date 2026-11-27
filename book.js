@@ -902,9 +902,31 @@
     if (builtIn) {
       entry = builtIn;
       listChapters();
-    } else {
+    } else if (GEMINI_ENABLED) {
       startGenerated();
+    } else {
+      showNoNotes();
     }
+  }
+
+  // Automatic Gemini notes are switched off (the free API didn't work reliably).
+  // Notes are added by asking Claude in a chat; see notes/HOW-TO-WRITE-NOTES.md.
+  const GEMINI_ENABLED = false;
+
+  function showNoNotes() {
+    document.querySelectorAll(".p-concepts, .p-cards, .p-quiz").forEach((p) => p.classList.add("hidden"));
+    $("panels").classList.add("single");
+    $("chaptersLabel").classList.add("hidden");
+    $("chapterNav").classList.add("hidden");
+    $("chapterSelect").parentElement.classList.add("hidden");
+    $("sectionJump").classList.add("hidden");
+    $("regenBtn").classList.add("hidden");
+    $("notesBody").innerHTML = `<div class="no-notes">
+      <p><strong>No notes for this book yet.</strong></p>
+      <p>To get notes, key concepts, flashcards and a quiz for every chapter, ask Claude in a Claude Code chat for this website:</p>
+      <p class="ask-line">Add notes for ${esc(book.title)}${book.isbn ? ` (ISBN ${esc(book.isbn)})` : ""}</p>
+      <p class="tiny">Tip: type <code>/model sonnet</code> first. It's faster and uses less of your Claude limit.</p>
+    </div>`;
   }
 
   start();

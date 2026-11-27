@@ -29,18 +29,7 @@ Book covers are real cover images looked up on Google Books (then Open Library) 
 - `notes/index.json` lists the books that have notes (matched by ISBN, or by title and author) and their chapters.
 - Each chapter's notes are a Markdown file, for example `notes/kurose-ross-8e/ch3.md`.
 - Each chapter also has study tools in a matching `.study.json` file (for example `notes/kurose-ross-8e/ch3.study.json`): **Key Concepts**, **Flashcards** (flip, shuffle) and a **Practice Quiz** (multiple choice with explanations and a score). They appear at the top of the chapter, above the full notes.
-- **Any other book gets notes automatically from Google's Gemini (free).** Open the book and its chapter list loads by itself; click a chapter and Gemini writes its notes, key concepts, flashcards and quiz (about 20–60 seconds the first time). They're saved in your browser, so reopening is instant. **Rewrite** asks Gemini for a fresh version.
-- Built-in notes can still be added by hand, following `notes/HOW-TO-WRITE-NOTES.md`.
-
-### One-time setup for automatic notes
-
-1. Go to [Google AI Studio](https://aistudio.google.com/apikey), sign in with a Google account and click **Create API key** (free, no credit card).
-2. In Vercel, open the project → **Settings → Environment Variables**, add `GEMINI_API_KEY` with that key (tick **Production**), and save.
-3. **Deployments** → ⋯ on the newest one → **Redeploy**.
-
-The free tier has rate limits, and Google may use free-tier requests (here: book titles and chapter names) to improve its products. If a model isn't available to your key, set `GEMINI_MODEL` in Vercel to one listed in AI Studio.
-
-Notes currently included: *Computer Networking: A Top-Down Approach*, 8th edition (Kurose & Ross), chapters 1–8.
+- **Other books:** ask Claude in a Claude Code chat for this repository: "Add notes for <book title>". Claude follows `notes/HOW-TO-WRITE-NOTES.md` (condensed notes by default, to save usage). Until then, the book page says "No notes for this book yet."
 
 ## Hosting
 
@@ -54,7 +43,6 @@ The site is hosted on [Vercel](https://vercel.com) and connected to this GitHub 
 | `style.css` | How it looks (also supports dark mode) |
 | `app.js` | Reads the feed and draws the calendar |
 | `book.html`, `book.js`, `book.css` | The book dashboard: chapters in a sidebar, and notes, key concepts, flashcards and quiz in panels that each scroll on their own |
-| `api/gemini.js` | Runs on Vercel and asks Gemini to write chapter lists, notes and study tools |
 | `notes/` | The book notes: an index plus one Markdown file per chapter |
 | `learn.js` | The Learning Center tab (class cards and book search) |
 | `api/feed.js` | Runs on Vercel and downloads the Canvas feed for the page |

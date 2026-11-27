@@ -33,7 +33,8 @@ books' files or anything outside `notes/`.
 
 ## Detail level
 
-The request says `full` or `condensed`:
+Use **condensed** unless the request asks for full notes (the owner wants to
+save their Claude usage):
 
 - **full**: thorough, section-by-section explanations (roughly 3,000–8,000
   words per chapter), with worked examples, formulas and step-by-step
@@ -41,8 +42,16 @@ The request says `full` or `condensed`:
 - **condensed**: the key points of each section as bullets (roughly
   800–2,000 words per chapter).
 
-Both levels get the same study file: 8–12 key concepts, 20–40 flashcards and
-12–16 quiz questions per chapter.
+Both levels get the same study file: 8–12 key concepts, 20–30 flashcards and
+12 quiz questions per chapter.
+
+## Working fast
+
+- Write each file in a single Write call; don't draft and rewrite.
+- Do the web research once for the whole book (table of contents), not per chapter.
+- Don't run browser tests for notes; `node scripts/check-notes.js` is enough.
+- Commit once when the book (or the requested chapters) is done, then push to
+  the working branch and `main`.
 
 ## `chN.md` format
 
