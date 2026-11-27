@@ -133,6 +133,14 @@ async function handle(req, res) {
   } catch (e) {
     if (res.headersSent) return res.end();
     if (e instanceof HttpError) return send(res, e.status, { error: e.message });
+    // Setup problems are reported plainly (they contain no user data) so they can be fixed.
+    if (e && e.setup) return send(res, 503, { error: 'Setup incomplete: ' + e.message });
+    const dbCodes = ['ENOTFOUND', 'ECONNREFUSED', 'ETIMEDOUT', 'ECONNRESET', '28P01', '28000', '3D000'];
+    if (e && (dbCodes.includes(e.code) || /certificate|SSL|connect/i.test(e.message || ''))) {
+      console.error('[mileage-assist] database connection failed:', e.code || e.message);
+      return send(res, 503, { error: "Setup incomplete: the app can't connect to its database. Check Storage → Neon is "
+        + 'connected to this project, then redeploy.' });
+    }
     console.error('[mileage-assist] request failed:', e && e.name, e && e.message && e.message.slice(0, 200));
     send(res, 500, { error: 'Something went wrong. Please try again.' });
   }

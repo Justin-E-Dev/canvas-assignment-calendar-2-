@@ -10,7 +10,7 @@ const ON_VERCEL = process.env.VERCEL === '1';
 function loadKeys() {
   let raw = process.env.MA_DATA_KEY;
   if (!raw) {
-    if (ON_VERCEL) throw new Error('MA_DATA_KEY is not set. Refusing to start without an encryption key.');
+    if (ON_VERCEL) throw Object.assign(new Error('MA_DATA_KEY is missing. Add it under Settings → Environment Variables, then redeploy.'), { setup: true });
     // Local development only: a fixed throwaway key so restarts can read earlier data.
     raw = crypto.createHash('sha256').update('mileage-assist-local-dev-key').digest('base64');
     if (!global.__maWarned) {
@@ -19,7 +19,9 @@ function loadKeys() {
     }
   }
   const master = Buffer.from(raw, 'base64');
-  if (master.length !== 32) throw new Error('MA_DATA_KEY must be 32 random bytes, base64-encoded.');
+  if (master.length !== 32) {
+    throw Object.assign(new Error('MA_DATA_KEY looks incomplete. Paste the whole key (44 characters ending in =), then redeploy.'), { setup: true });
+  }
   const derive = (info) => Buffer.from(crypto.hkdfSync('sha256', master, Buffer.alloc(0), info, 32));
   return { enc: derive('mileage-assist/enc/v1'), mac: derive('mileage-assist/mac/v1') };
 }
