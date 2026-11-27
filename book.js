@@ -823,12 +823,16 @@
   }
   const waitingMsg = (text) => `<p class="empty">${esc(text)}</p>`;
 
-  async function generateChapter(ch, token) {
+  // Writes one chapter. "showing" says whether that chapter is on screen right now
+  // (Regenerate all writes chapters in the background). Returns { ok, error }.
+  async function generateChapter(ch, token, showing) {
     const c = chapterStore(ch);
-    const live = () => token === showToken;
-    $("notesBody").innerHTML = waiting(`Gemini is writing Chapter ${esc(ch.number)}…`);
-    $("sectionJump").classList.add("hidden");
-    ["concepts", "flashcards", "quiz"].forEach((p) => PANEL[p](waiting("Coming up after the notes…")));
+    const live = showing || (() => token === showToken);
+    if (live()) {
+      $("notesBody").innerHTML = waiting(`Gemini is writing Chapter ${esc(ch.number)}…`);
+      $("sectionJump").classList.add("hidden");
+      ["concepts", "flashcards", "quiz"].forEach((p) => PANEL[p](waiting("Coming up after the notes…")));
+    }
     let lastPaint = 0;
     let conceptsShown = 0;
     try {
@@ -860,20 +864,91 @@
       c.markdown = chapterMarkdown(ch, parts);
       c.study = study;
       saveGen();
+      markWritten();
       if (live()) {
         renderNotes(c.markdown);
         renderStudy(study, ch);
       }
+      return { ok: true };
     } catch (err) {
-      if (!live()) return;
-      $("notesBody").innerHTML = errorHtml(err) + `<p><button class="pill-btn" id="genRetry" type="button">Try again</button></p>`;
-      $("genRetry").onclick = () => generateChapter(ch, showToken);
-      ["concepts", "flashcards", "quiz"].forEach((p) => PANEL[p](waitingMsg("Not written yet.")));
+      if (live()) {
+        $("notesBody").innerHTML = errorHtml(err) + `<p><button class="pill-btn" id="genRetry" type="button">Try again</button></p>`;
+        $("genRetry").onclick = () => generateChapter(ch, showToken);
+        ["concepts", "flashcards", "quiz"].forEach((p) => PANEL[p](waitingMsg("Not written yet.")));
+      }
+      return { ok: false, error: err };
     }
+  }
+
+  // ---------- Regenerate all: every chapter, one after another ----------
+  const bulk = { running: false, stop: false, at: null, queue: [] };
+
+  function markWritten() {
+    if (!entry || !entry.generated) return;
+    document.querySelectorAll("#chapterNav button").forEach((b, j) => {
+      const ch = entry.chapters[j];
+      b.classList.toggle("written", !!(ch && (genBook().content[ch.number] || {}).markdown));
+      b.classList.toggle("writing", bulk.running && bulk.at === j);
+    });
+  }
+
+  function bulkLabel(text) {
+    $("regenAllBtn").querySelector("span").textContent = text;
+  }
+
+  async function regenerateAll() {
+    if (bulk.running) {
+      bulk.stop = true;
+      bulkLabel("Stopping after this chapter…");
+      return;
+    }
+    const total = entry.chapters.length;
+    if (!confirm(`Regenerate all ${total} chapters? Gemini will write each chapter again, one after another (about 1-3 minutes each). Finished chapters are saved as it goes; you can keep reading while it works.`)) return;
+    Object.assign(bulk, { running: true, stop: false, at: null, queue: entry.chapters.map((_, i) => i) });
+    $("regenBtn").disabled = true;
+    const failed = [];
+    let stoppedFor = "";
+    for (let k = 0; k < total; k++) {
+      if (bulk.stop) {
+        stoppedFor = "stopped";
+        break;
+      }
+      bulk.at = k;
+      bulk.queue = bulk.queue.filter((i) => i !== k);
+      markWritten();
+      bulkLabel(`Writing ${k + 1} of ${total}… (click to stop)`);
+      const ch = entry.chapters[k];
+      const showing = () => current === k;
+      if (showing()) showChapter(k); // shows the "writing" state below
+      const result = await generateChapter(ch, null, showing);
+      if (!result.ok) {
+        failed.push(ch.number);
+        if (/daily limit|isn't working|aren't set up/i.test(result.error.message)) {
+          stoppedFor = result.error.message;
+          break;
+        }
+      }
+    }
+    Object.assign(bulk, { running: false, at: null, queue: [] });
+    $("regenBtn").disabled = false;
+    markWritten();
+    bulkLabel("Regenerate all");
+    const done = total - failed.length;
+    if (stoppedFor === "stopped") alert("Stopped. Chapters finished before you stopped are saved.");
+    else if (stoppedFor) alert(`Stopped early: ${stoppedFor}\n\nChapters finished so far are saved. Press Regenerate all again later to redo the rest.`);
+    else if (failed.length) alert(`Done: ${done} of ${total} chapters written. These didn't work and can be retried with Regenerate chapter: ${failed.join(", ")}.`);
+    if (current !== null && !bulk.running) showChapter(current);
   }
 
   async function showGenerated(ch, token, rewrite) {
     const c = chapterStore(ch);
+    const idx = entry.chapters.indexOf(ch);
+    if (bulk.running && bulk.at === idx && !rewrite) {
+      $("notesBody").innerHTML = waiting(`Gemini is writing Chapter ${esc(ch.number)} (Regenerate all)…`);
+      $("sectionJump").classList.add("hidden");
+      ["concepts", "flashcards", "quiz"].forEach((p) => PANEL[p](waiting("Coming up after the notes…")));
+      return;
+    }
     if (rewrite) {
       genBook().content[ch.number] = {};
       saveGen();
@@ -927,6 +1002,9 @@
       .map((ch, i) => `<option value="${i}">Chapter ${esc(ch.number)}: ${esc(ch.title)}</option>`).join("");
     $("chapterSelect").onchange = () => showChapter(Number($("chapterSelect").value));
     $("regenBtn").classList.toggle("hidden", !entry.generated);
+    $("regenAllBtn").classList.toggle("hidden", !entry.generated);
+    $("regenAllBtn").onclick = regenerateAll;
+    markWritten();
     $("regenBtn").onclick = () => {
       if (current === null) return;
       const ch = entry.chapters[current];
@@ -1034,6 +1112,7 @@
     $("chapterSelect").parentElement.classList.add("hidden");
     $("sectionJump").classList.add("hidden");
     $("regenBtn").classList.add("hidden");
+    $("regenAllBtn").classList.add("hidden");
     $("notesBody").innerHTML = `<div class="no-notes">
       <p><strong>No notes for this book yet.</strong></p>
       <p>To get notes, key concepts, flashcards and a quiz for every chapter, ask Claude in a Claude Code chat for this website:</p>

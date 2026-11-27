@@ -516,3 +516,12 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   }
   .top-theme span { display: none; }
 }
+
+/* Regenerate all */
+#regenAllBtn { margin-left: 0; }
+#regenBtn:disabled { opacity: 0.5; cursor: default; }
+.side-nav button.written .ch-name::after { content: " ✓"; opacity: 0.6; }
+.side-nav button.writing .ch-num { animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .side-nav button.writing .ch-num { animation: none; } }
+@media (max-width: 900px) { .top-btn span { display: none; } }
