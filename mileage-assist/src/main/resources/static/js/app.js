@@ -100,7 +100,6 @@
     if (entries.length) {
       // Start the next trip where the last one ended.
       $('f-odo-start').value = entries[0].odometerEnd;
-      if (!$('f-initials').value) $('f-initials').value = entries[0].initials;
     }
     updateMiles();
   }
@@ -132,9 +131,7 @@
       const saved = await MA.api('/api/entries', { method: 'POST', body });
       entries.unshift(saved);
       MA.toast('Trip saved: ' + fmtMiles(saved.miles) + ' miles.');
-      const keepInitials = body.initials;
       form.reset();
-      $('f-initials').value = keepInitials.toUpperCase();
       loadInitials();
       renderToday();
     } catch (ex) {
