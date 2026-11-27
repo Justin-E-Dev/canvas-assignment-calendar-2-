@@ -44,7 +44,7 @@ html, body { height: 100%; }
 body {
   margin: 0;
   font-family: "Poppins", system-ui, -apple-system, "Segoe UI", sans-serif;
-  font-size: 14px;
+  font-size: 15px;
   background: var(--bg);
   color: var(--text);
 }
@@ -55,9 +55,9 @@ body {
 .center { text-align: center; }
 svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
-/* ---------- Layout: one screen on desktop ---------- */
-.shell { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 20px; height: 100vh; padding: 20px; }
-.main { display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 18px; min-height: 0; }
+/* ---------- Layout: roomy, with a sidebar that stays put while the page scrolls ---------- */
+.shell { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 24px; min-height: 100vh; padding: 24px; align-items: start; }
+.main { display: grid; gap: 24px; min-width: 0; }
 
 /* ---------- Sidebar ---------- */
 .side {
@@ -67,7 +67,9 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   padding: 22px 0;
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  position: sticky;
+  top: 24px;
+  height: calc(100vh - 48px);
 }
 .side-logo {
   display: flex;
@@ -154,8 +156,8 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .notice { padding: 20px 24px; margin: 0; }
 .notice a { color: var(--navy); font-weight: 600; }
 
-.stats { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 18px; }
-.stat { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 20px; min-width: 0; }
+.stats { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 24px; }
+.stat { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 22px 24px; min-width: 0; }
 .stat-value { margin: 0; font-size: 1.45rem; font-weight: 600; line-height: 1.2; }
 .stat-label { margin: 2px 0 0; font-size: 0.8rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .stat-icon {
@@ -172,11 +174,11 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 :root[data-theme="dark"] .stat-icon { color: #aab6ff; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .stat-icon { color: #aab6ff; } }
 
-.book-card { justify-content: flex-start; gap: 16px; padding: 14px 18px; }
+.book-card { justify-content: flex-start; gap: 18px; padding: 16px 22px; }
 .cover {
   flex: none;
-  width: 60px;
-  height: 88px;
+  width: 70px;
+  height: 104px;
   border-radius: 6px;
   overflow: hidden;
   background: var(--navy-soft);
@@ -192,29 +194,29 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .book-info p { margin: 0; font-size: 0.8rem; }
 
 /* ---------- Panels (each scrolls on its own) ---------- */
+/* Row 1: notes + key concepts. Row 2: quiz + flashcards. Each panel scrolls inside. */
 .panels {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 18px;
-  min-height: 0;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  grid-template-rows: 78vh 70vh;
+  gap: 24px;
 }
 .panel { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-.p-notes { grid-column: 1; grid-row: 1 / span 2; }
+.p-notes { grid-column: 1; grid-row: 1; }
 .p-concepts { grid-column: 2; grid-row: 1; }
-.p-cards { grid-column: 3; grid-row: 1; }
-.p-quiz { grid-column: 2 / span 2; grid-row: 2; }
+.p-quiz { grid-column: 1; grid-row: 2; }
+.p-cards { grid-column: 2; grid-row: 2; }
 .panel-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 16px 20px 12px;
+  padding: 18px 26px 14px;
   border-bottom: 1px solid var(--line);
   flex: none;
 }
-.panel-head h3 { margin: 0; font-size: 1rem; font-weight: 600; white-space: nowrap; }
-.panel-body { padding: 16px 20px 20px; min-height: 0; }
+.panel-head h3 { margin: 0; font-size: 1.08rem; font-weight: 600; white-space: nowrap; }
+.panel-body { padding: 22px 26px 26px; min-height: 0; }
 .scroll { flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 .scroll::-webkit-scrollbar { width: 8px; }
 .scroll::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
@@ -257,8 +259,8 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .empty { color: var(--muted); margin: 0; line-height: 1.6; }
 
 /* ---------- Notes ---------- */
-.note-section { line-height: 1.7; scroll-margin-top: 8px; }
-.note-section + .note-section { margin-top: 22px; }
+.note-section { line-height: 1.75; scroll-margin-top: 8px; max-width: 75ch; }
+.note-section + .note-section { margin-top: 30px; }
 .note-section h3 {
   margin: 0 0 6px;
   padding-bottom: 6px;
@@ -284,8 +286,8 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .notes-foot { margin: 22px 0 0; padding-top: 12px; border-top: 1px solid var(--line); font-size: 0.75rem; color: var(--muted); }
 
 /* ---------- Key concepts ---------- */
-.concepts { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-.concept { display: flex; gap: 12px; padding: 12px 14px; border-radius: 12px; background: var(--bg); }
+.concepts { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.concept { display: flex; gap: 14px; padding: 16px 18px; border-radius: 12px; background: var(--bg); }
 .concept-num {
   flex: none;
   width: 26px;
@@ -298,13 +300,13 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   font-size: 0.75rem;
   font-weight: 600;
 }
-.concept h4 { margin: 2px 0 3px; font-size: 0.88rem; font-weight: 600; }
-.concept p { margin: 0; font-size: 0.82rem; line-height: 1.55; color: var(--muted); }
+.concept h4 { margin: 2px 0 4px; font-size: 0.95rem; font-weight: 600; }
+.concept p { margin: 0; font-size: 0.88rem; line-height: 1.6; color: var(--muted); }
 .concept p strong { color: var(--text); }
 
 /* ---------- Flashcards ---------- */
-.fc-body { flex: 1; display: flex; flex-direction: column; gap: 12px; }
-.flashcard { position: relative; flex: 1; min-height: 150px; cursor: pointer; perspective: 1200px; border-radius: 14px; outline: none; }
+.fc-body { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 16px; }
+.flashcard { position: relative; flex: 0 1 320px; min-height: 220px; cursor: pointer; perspective: 1200px; border-radius: 14px; outline: none; }
 .fc-face {
   position: absolute;
   inset: 0;
@@ -319,8 +321,8 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   overflow: auto;
   overflow-wrap: anywhere;
 }
-.fc-front { background: var(--navy); color: #fff; font-weight: 600; font-size: 1.05rem; }
-.fc-back { background: var(--card); color: var(--text); border: 2px solid var(--navy); transform: rotateY(180deg); font-size: 0.9rem; }
+.fc-front { background: var(--navy); color: #fff; font-weight: 600; font-size: 1.2rem; padding: 24px; }
+.fc-back { background: var(--card); color: var(--text); border: 2px solid var(--navy); transform: rotateY(180deg); font-size: 1rem; padding: 24px; }
 .flashcard.flipped .fc-front { transform: rotateY(180deg); }
 .flashcard.flipped .fc-back { transform: rotateY(360deg); }
 .flashcard:focus-visible { box-shadow: 0 0 0 3px var(--orange); }
@@ -332,8 +334,8 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .quiz-head-right { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .quiz-score { font-size: 0.8rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .quiz-score strong { color: var(--text); }
-.quiz-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
-.quiz-q { padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line); }
+.quiz-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; }
+.quiz-q { padding: 18px 20px; border-radius: 12px; border: 1px solid var(--line); }
 .quiz-question { margin: 0 0 10px; font-weight: 600; line-height: 1.45; }
 .quiz-question span { color: var(--orange); margin-right: 4px; }
 .quiz-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -343,8 +345,8 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   align-items: flex-start;
   text-align: left;
   font: inherit;
-  font-size: 0.85rem;
-  padding: 9px 12px;
+  font-size: 0.9rem;
+  padding: 11px 14px;
   border-radius: 10px;
   border: 1px solid var(--line);
   background: var(--card);
@@ -376,30 +378,30 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 
 /* ---------- Smaller screens: panels stack, each still scrolls on its own ---------- */
 @media (max-width: 1200px) {
-  .panels { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
-  .p-notes { grid-column: 1; grid-row: 1 / span 2; }
-  .p-concepts { grid-column: 2; grid-row: 1; }
-  .p-cards { grid-column: 2; grid-row: 2; }
-  .p-quiz { grid-column: 1 / span 2; grid-row: 3; height: 70vh; }
-  .shell { height: auto; min-height: 100vh; }
-  .main { grid-template-rows: auto auto auto; }
-  .panels { grid-template-rows: 42vh 42vh auto; }
-  .quiz-options { grid-template-columns: 1fr; }
   .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .book-card { grid-column: 1 / -1; }
+  .panels { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: 75vh 60vh 75vh; }
+  .p-notes { grid-column: 1 / span 2; grid-row: 1; }
+  .p-concepts { grid-column: 1; grid-row: 2; }
+  .p-cards { grid-column: 2; grid-row: 2; }
+  .p-quiz { grid-column: 1 / span 2; grid-row: 3; }
+  .quiz-options { grid-template-columns: 1fr; }
 }
 @media (max-width: 900px) {
-  .shell { grid-template-columns: 1fr; padding: 12px; gap: 12px; }
+  .shell { grid-template-columns: 1fr; padding: 12px; gap: 14px; }
+  .main { gap: 14px; }
   .side { display: none; }
   .mobile-chapter { display: block; }
   .stats { grid-template-columns: 1fr 1fr; gap: 12px; }
-  .book-card { grid-column: 1 / -1; }
-  .panels { grid-template-columns: 1fr; grid-template-rows: none; gap: 12px; }
+  .panels { grid-template-columns: 1fr; grid-template-rows: none; gap: 14px; }
   .p-notes, .p-concepts, .p-cards, .p-quiz { grid-column: 1; grid-row: auto; }
   .p-notes { height: 75vh; }
-  .p-concepts { height: 55vh; }
-  .p-cards { height: 380px; }
+  .p-concepts { height: 60vh; }
+  .p-cards { height: 400px; }
   .p-quiz { height: 75vh; }
+  .panel-head { padding: 14px 18px 12px; }
+  .panel-body { padding: 16px 18px 20px; }
+  .stat { padding: 16px; }
   .stat-icon { width: 42px; height: 42px; }
   .stat-value { font-size: 1.2rem; }
 }
@@ -411,5 +413,5 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 }
 
 /* Book without notes: the notes panel takes the whole area. */
-.panels.single { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr); }
-.panels.single .p-notes { grid-column: 1; grid-row: 1; height: auto; }
+.panels.single { grid-template-columns: 1fr; grid-template-rows: auto; }
+.panels.single .p-notes { grid-column: 1; grid-row: 1; height: auto; min-height: 200px; }
