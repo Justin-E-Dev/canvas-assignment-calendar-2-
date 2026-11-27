@@ -78,7 +78,10 @@
         <article class="card panel p-notes">
           <header class="panel-head">
             <h3>Notes</h3>
-            <select id="sectionJump" class="panel-select" aria-label="Jump to section"></select>
+            <div class="notes-tools">
+              <select id="sectionJump" class="panel-select" aria-label="Jump to section"></select>
+              <button id="rewriteBtn" class="text-btn hidden" type="button" title="Ask Gemini to write this chapter again">Rewrite</button>
+            </div>
           </header>
           <div id="notesBody" class="panel-body scroll"></div>
         </article>
@@ -93,6 +96,7 @@
             <h3>Flashcards</h3>
             <button class="text-btn fc-shuffle" type="button">Shuffle</button>
           </header>
+          <div id="flashEmpty" class="panel-body fc-empty"></div>
           <div class="panel-body fc-body">
             <div class="flashcard" tabindex="0" role="button">
               <div class="fc-face fc-front"></div>

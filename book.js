@@ -40,7 +40,7 @@
     const isbn = String(book.isbn || "").replace(/[^0-9X]/gi, "");
     const title = book.title.toLowerCase();
     const authors = (book.authors || []).join(" ").toLowerCase();
-    return index.books.find((b) =>
+    return (index.books || []).find((b) =>
       (isbn && b.isbns.includes(isbn)) ||
       (title.includes(b.match.title) && authors.includes(b.match.author)));
   }
@@ -297,8 +297,18 @@
   loadCover();
 
   // ---------- Panels ----------
-  let entry = null;
+  // Two sources of chapter content, shown the same way:
+  //  - built-in notes stored in this website (notes/index.json), e.g. Computer Networking;
+  //  - notes written automatically by Gemini (api/gemini.js), saved in this browser.
+  let entry = null; // { id, edition, source, chapters: [{ number, title, file? }], generated }
   let current = null; // index of the chapter shown
+  let showToken = 0; // ignores slow answers for a chapter you've already left
+
+  const GEN_KEY = "cac.genNotes";
+  const genStore = load(GEN_KEY, {}); // { "<course>::<book>": { edition, note, chapters, model, content: { "<n>": { markdown, study } } } }
+  const genId = `${course}::${bookId}`;
+  const genBook = () => (genStore[genId] ||= { content: {} });
+  const saveGen = () => save(GEN_KEY, genStore);
 
   function updateStats() {
     if (!entry || current === null) return;
@@ -317,86 +327,158 @@
     $("chapterSelect").value = String(i);
   }
 
-  async function showChapter(i) {
+  const waiting = (text) => `<div class="writing"><span class="spinner" aria-hidden="true"></span><p>${text}</p></div>`;
+
+  // ---------- Asking Gemini (through this website's own server function) ----------
+  async function gemini(payload) {
+    let res;
+    try {
+      res = await fetch("/api/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload, book: { ...book, course } }),
+      });
+    } catch {
+      throw new Error("Couldn't reach the website. Check your internet connection.");
+    }
+    let data = null;
+    try {
+      data = await res.json();
+    } catch {
+      /* not JSON */
+    }
+    if (!res.ok) {
+      const err = new Error((data && data.error) || {
+        404: "Automatic notes only work on the live website.",
+        504: "Gemini took too long to answer. Please try again.",
+      }[res.status] || `Something went wrong (error ${res.status}).`);
+      err.setup = !!(data && data.setup);
+      throw err;
+    }
+    return data;
+  }
+
+  const SETUP_HELP = `<p class="tiny">One-time setup: get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>,
+    add it in Vercel → Settings → Environment Variables as <code>GEMINI_API_KEY</code>, then redeploy.</p>`;
+  const errorHtml = (err) => `<p class="empty error">${esc(err.message)}</p>${err.setup ? SETUP_HELP : ""}`;
+
+  // ---------- Showing one chapter ----------
+  function renderNotes(markdown) {
+    const { html, sections } = renderMarkdown(markdown);
+    $("notesBody").innerHTML = `${html}<p class="notes-foot">${esc(entry.source)}</p>`;
+    $("notesBody").scrollTop = 0;
+    $("sectionJump").classList.remove("hidden");
+    $("sectionJump").innerHTML = `<option value="">Jump to section…</option>` +
+      sections.map((s) => `<option value="${s.id}">${esc([s.number, s.title].filter(Boolean).join(" "))}</option>`).join("");
+    $("sectionJump").onchange = () => {
+      const target = document.getElementById($("sectionJump").value);
+      if (target) $("notesBody").scrollTo({ top: target.offsetTop - $("notesBody").offsetTop - 8, behavior: "smooth" });
+    };
+  }
+
+  function renderStudy(study, ch) {
+    $("conceptsBody").innerHTML = `<ol class="concepts">${study.keyConcepts.map((k, n) => `
+      <li class="concept"><span class="concept-num">${n + 1}</span>
+        <div><h4>${inline(k.title)}</h4><p>${inline(k.text)}</p></div></li>`).join("")}</ol>`;
+    $("conceptsBody").scrollTop = 0;
+    $("statCards").textContent = study.flashcards.length;
+    $("flashcards").classList.toggle("is-empty", !study.flashcards.length);
+    if (study.flashcards.length) setupFlashcards($("flashcards"), study.flashcards);
+    setupQuiz($("quiz"), study.quiz, `${entry.id}:${ch.number}`);
+    $("quiz").querySelector(".quiz-scroll").scrollTop = 0;
+    updateStats();
+  }
+
+  function studyLoading(text) {
+    $("conceptsBody").innerHTML = waiting(text);
+    $("flashcards").classList.add("is-empty");
+    $("flashEmpty").innerHTML = waiting(text);
+    $("quiz").querySelector(".quiz-list").innerHTML = `<li>${waiting(text)}</li>`;
+    $("quiz").querySelector(".quiz-score").textContent = "";
+    $("statCards").textContent = "–";
+  }
+
+  function studyError(err) {
+    $("conceptsBody").innerHTML = errorHtml(err);
+    $("flashEmpty").innerHTML = errorHtml(err);
+    $("quiz").querySelector(".quiz-list").innerHTML = `<li>${errorHtml(err)}</li>`;
+  }
+
+  // Built-in notes: two files per chapter.
+  async function showBuiltIn(ch, token) {
+    const [res, studyRes] = await Promise.all([
+      fetch(ch.file),
+      fetch(ch.file.replace(/\.md$/, ".study.json")).catch(() => null),
+    ]);
+    if (token !== showToken) return;
+    if (!res.ok) throw new Error("Couldn't load this chapter. Check your connection and try again.");
+    renderNotes(await res.text());
+    let study = null;
+    try {
+      if (studyRes && studyRes.ok) study = await studyRes.json();
+    } catch {
+      study = null;
+    }
+    if (token !== showToken) return;
+    if (study) renderStudy(study, ch);
+    else studyError(new Error("No study tools for this chapter."));
+  }
+
+  // Gemini notes: written the first time you open a chapter, then saved in this browser.
+  async function showGenerated(ch, token, rewrite) {
+    const saved = genBook().content[ch.number] || {};
+    const label = `Chapter ${ch.number}`;
+
+    const notesJob = !rewrite && saved.markdown
+      ? Promise.resolve(saved.markdown)
+      : (async () => {
+          $("notesBody").innerHTML = waiting(`Gemini is writing the notes for ${esc(label)}… this usually takes 20–60 seconds.`);
+          $("sectionJump").classList.add("hidden");
+          return (await gemini({ action: "notes", chapter: ch })).markdown;
+        })();
+    const studyJob = !rewrite && saved.study
+      ? Promise.resolve(saved.study)
+      : (async () => {
+          studyLoading(`Writing key concepts, flashcards and quiz for ${esc(label)}…`);
+          const s = await gemini({ action: "study", chapter: ch });
+          return { keyConcepts: s.keyConcepts, flashcards: s.flashcards, quiz: s.quiz };
+        })();
+
+    const keep = (part, value) => {
+      const content = genBook().content;
+      content[ch.number] = { ...(content[ch.number] || {}), [part]: value, at: new Date().toISOString() };
+      saveGen();
+    };
+    await Promise.all([
+      notesJob.then((md) => { keep("markdown", md); if (token === showToken) renderNotes(md); })
+        .catch((err) => { if (token === showToken) { $("notesBody").innerHTML = errorHtml(err); $("sectionJump").classList.add("hidden"); } }),
+      studyJob.then((s) => { keep("study", s); if (token === showToken) renderStudy(s, ch); })
+        .catch((err) => { if (token === showToken) studyError(err); }),
+    ]);
+  }
+
+  async function showChapter(i, rewrite) {
     const ch = entry.chapters[i];
     if (!ch) return;
+    const token = ++showToken;
     current = i;
     setChapterActive(i);
     history.replaceState(null, "", `#chapter-${ch.number}`);
     $("statChapter").textContent = `Chapter ${ch.number}`;
     $("statChapterTitle").textContent = ch.title;
-    $("notesBody").innerHTML = `<p class="empty">Loading Chapter ${esc(ch.number)}…</p>`;
+    $("statScore").textContent = "–";
     try {
-      const [res, studyRes] = await Promise.all([
-        fetch(ch.file),
-        fetch(ch.file.replace(/\.md$/, ".study.json")).catch(() => null),
-      ]);
-      if (!res.ok) throw new Error();
-      const { html, sections } = renderMarkdown(await res.text());
-      let study = null;
-      try {
-        if (studyRes && studyRes.ok) study = await studyRes.json();
-      } catch {
-        study = null;
-      }
-
-      // Notes
-      $("notesBody").innerHTML = `${html}<p class="notes-foot">${esc(entry.source)}</p>`;
-      $("notesBody").scrollTop = 0;
-      $("sectionJump").innerHTML = `<option value="">Jump to section…</option>` +
-        sections.map((s) => `<option value="${s.id}">${esc([s.number, s.title].filter(Boolean).join(" "))}</option>`).join("");
-      $("sectionJump").onchange = () => {
-        const target = document.getElementById($("sectionJump").value);
-        if (target) $("notesBody").scrollTo({ top: target.offsetTop - $("notesBody").offsetTop - 8, behavior: "smooth" });
-      };
-
-      // Key concepts, flashcards, quiz
-      if (study) {
-        $("conceptsBody").innerHTML = `<ol class="concepts">${study.keyConcepts.map((k, n) => `
-          <li class="concept"><span class="concept-num">${n + 1}</span>
-            <div><h4>${inline(k.title)}</h4><p>${inline(k.text)}</p></div></li>`).join("")}</ol>`;
-        $("conceptsBody").scrollTop = 0;
-        $("statCards").textContent = study.flashcards.length;
-        setupFlashcards($("flashcards"), study.flashcards);
-        setupQuiz($("quiz"), study.quiz, `${entry.id}:${ch.number}`);
-        $("quiz").querySelector(".quiz-scroll").scrollTop = 0;
-        document.querySelectorAll(".p-concepts, .p-cards, .p-quiz").forEach((p) => p.classList.remove("hidden"));
-      } else {
-        $("statCards").textContent = "–";
-        document.querySelectorAll(".p-concepts, .p-cards, .p-quiz").forEach((p) => p.classList.add("hidden"));
-      }
-      updateStats();
-    } catch {
-      $("notesBody").innerHTML = `<p class="empty">Couldn't load this chapter. Check your connection and try again.</p>`;
+      if (entry.generated) await showGenerated(ch, token, rewrite);
+      else await showBuiltIn(ch, token);
+    } catch (err) {
+      if (token === showToken) $("notesBody").innerHTML = errorHtml(err);
     }
   }
 
-  function noNotes(message) {
-    $("chaptersLabel").classList.add("hidden");
-    $("chapterNav").classList.add("hidden");
-    $("chapterSelect").parentElement.classList.add("hidden");
-    document.querySelectorAll(".p-concepts, .p-cards, .p-quiz").forEach((p) => p.classList.add("hidden"));
-    $("sectionJump").classList.add("hidden");
-    $("panels").classList.add("single");
-    $("notesBody").innerHTML = message;
-  }
-
-  async function start() {
-    let index;
-    try {
-      const res = await fetch("notes/index.json", { cache: "no-cache" });
-      index = await res.json();
-    } catch {
-      noNotes(`<p class="empty">Couldn't load the notes. Check your connection and refresh the page.</p>`);
-      return;
-    }
-    entry = findNotes(index);
-    if (!entry) {
-      noNotes(`<p class="empty"><strong>No notes for this book yet.</strong><br>
-        To get them, ask Claude in a Claude Code chat for this website: “Add notes for ${esc(book.title)}”.
-        Claude will look the book up and add notes, key concepts, flashcards and a quiz for every chapter.</p>`);
-      return;
-    }
+  function listChapters() {
+    $("chaptersLabel").classList.remove("hidden");
+    $("chapterNav").classList.remove("hidden");
+    $("chapterSelect").parentElement.classList.remove("hidden");
     $("chapterNav").innerHTML = entry.chapters.map((ch, i) => `
       <button type="button" data-i="${i}" title="${esc(ch.title)}">
         <span class="ch-num">${esc(ch.number)}</span><span class="ch-name">${esc(ch.title)}</span>
@@ -405,6 +487,10 @@
     $("chapterSelect").innerHTML = entry.chapters
       .map((ch, i) => `<option value="${i}">Chapter ${esc(ch.number)}: ${esc(ch.title)}</option>`).join("");
     $("chapterSelect").onchange = () => showChapter(Number($("chapterSelect").value));
+    $("rewriteBtn").classList.toggle("hidden", !entry.generated);
+    $("rewriteBtn").onclick = () => {
+      if (current !== null && confirm("Ask Gemini to write this chapter again? The current version will be replaced.")) showChapter(current, true);
+    };
 
     window.addEventListener("hashchange", () => {
       const n = (location.hash.match(/^#chapter-(.+)$/) || [])[1];
@@ -414,6 +500,79 @@
     const fromHash = (location.hash.match(/^#chapter-(.+)$/) || [])[1];
     const i = entry.chapters.findIndex((c) => c.number === fromHash);
     showChapter(i >= 0 ? i : 0);
+  }
+
+  // Open Library sometimes has the exact edition's table of contents.
+  async function openLibraryChapters() {
+    if (!book.isbn) return [];
+    try {
+      const res = await fetch(`https://openlibrary.org/isbn/${encodeURIComponent(book.isbn)}.json`);
+      if (!res.ok) return [];
+      const toc = (await res.json()).table_of_contents || [];
+      const top = toc.filter((t) => t.title && !(t.level > 0));
+      const list = (top.length >= 3 ? top : toc.filter((t) => t.title)).map((t, n) => ({
+        number: String(t.label || "").replace(/^chapter\s*/i, "").trim() || String(n + 1),
+        title: String(t.title).trim(),
+      }));
+      return list.length >= 3 ? list : [];
+    } catch {
+      return [];
+    }
+  }
+
+  // No built-in notes: get the chapter list (saved, Open Library, or Gemini), then go.
+  async function startGenerated() {
+    const g = genBook();
+    if (!g.chapters || !g.chapters.length) {
+      document.querySelectorAll(".p-concepts, .p-cards, .p-quiz").forEach((p) => p.classList.add("hidden"));
+      $("panels").classList.add("single");
+      $("chaptersLabel").classList.add("hidden");
+      $("chapterSelect").parentElement.classList.add("hidden");
+      $("sectionJump").classList.add("hidden");
+      $("notesBody").innerHTML = waiting("Finding this book's chapters…");
+      try {
+        const ol = await openLibraryChapters();
+        if (ol.length) {
+          Object.assign(g, { chapters: ol, note: "Chapter list from Open Library.", edition: book.title });
+        } else {
+          const data = await gemini({ action: "chapters" });
+          if (!data.chapters || !data.chapters.length) throw new Error("Gemini couldn't come up with a chapter list for this book.");
+          Object.assign(g, { chapters: data.chapters, note: data.note, edition: data.edition, recognized: data.recognized });
+        }
+        saveGen();
+      } catch (err) {
+        $("notesBody").innerHTML = errorHtml(err) + `<p><button class="pill-btn" id="retryBtn" type="button">Try again</button></p>`;
+        $("retryBtn").onclick = () => startGenerated();
+        return;
+      }
+      document.querySelectorAll(".p-concepts, .p-cards, .p-quiz").forEach((p) => p.classList.remove("hidden"));
+      $("panels").classList.remove("single");
+    }
+    entry = {
+      id: `gen:${genId}`,
+      edition: g.edition || book.title,
+      generated: true,
+      source: `Written automatically by Google's Gemini AI from its general knowledge of this book. ${g.note || ""} It may not match your edition exactly; check anything important against your textbook.`,
+      chapters: g.chapters,
+    };
+    listChapters();
+  }
+
+  async function start() {
+    let index = { books: [] };
+    try {
+      const res = await fetch("notes/index.json", { cache: "no-cache" });
+      if (res.ok) index = await res.json();
+    } catch {
+      /* no built-in notes reachable; Gemini can still write them */
+    }
+    const builtIn = findNotes(index);
+    if (builtIn) {
+      entry = builtIn;
+      listChapters();
+    } else {
+      startGenerated();
+    }
   }
 
   start();

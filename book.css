@@ -415,3 +415,30 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 /* Book without notes: the notes panel takes the whole area. */
 .panels.single { grid-template-columns: 1fr; grid-template-rows: auto; }
 .panels.single .p-notes { grid-column: 1; grid-row: 1; height: auto; min-height: 200px; }
+
+/* Notes header tools */
+.notes-tools { display: flex; align-items: center; gap: 12px; min-width: 0; justify-content: flex-end; flex: 1; }
+.notes-tools .panel-select { max-width: 100%; min-width: 0; }
+
+/* "Gemini is writing…" state */
+.writing { display: flex; align-items: center; gap: 14px; padding: 18px; border-radius: 12px; background: var(--bg); }
+.writing p { margin: 0; color: var(--muted); line-height: 1.5; }
+.spinner {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 3px solid var(--line);
+  border-top-color: var(--navy);
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
+.empty.error { color: var(--red); }
+.empty a, .tiny a { color: var(--navy); font-weight: 600; }
+.tiny code { font-size: 0.85em; padding: 1px 4px; border-radius: 4px; background: var(--navy-soft); }
+
+/* Flashcards panel: either the deck or a message */
+.fc-empty { display: none; }
+#flashcards.is-empty .fc-empty { display: block; }
+#flashcards.is-empty .fc-body, #flashcards.is-empty .fc-shuffle { display: none; }
