@@ -59,3 +59,11 @@ create table if not exists user_programs (
     program varchar(100) not null,
     primary key (user_id, program)
 );
+
+-- One saved spreadsheet template per user (stored inside the encrypted database)
+create table if not exists user_templates (
+    user_id     bigint       primary key references app_users(id) on delete cascade,
+    file_name   varchar(255) not null,
+    content     blob         not null,
+    uploaded_at timestamp    not null default current_timestamp
+);

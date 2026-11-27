@@ -114,35 +114,76 @@
           <div class="sheet-stats"><span><b id="s-rows">0</b> trips</span><span><b id="s-miles">0.0</b> total miles</span></div>
         </div>
         <div class="actions">
-          <a class="btn btn-ghost" href="/api/export/csv" download>
+          <button class="btn btn-ghost" type="button" id="all-csv">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14v-2H5v2ZM19 9h-4V3H9v6H5l7 7 7-7Z"/></svg>
             Export as CSV
-          </a>
-          <a class="btn btn-primary" href="/api/export/xlsx" download>
+          </button>
+          <button class="btn btn-primary" type="button" id="all-xlsx">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16c0 1.1.9 2 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm-1.2 15-1.8-2.9L9.2 17H7.4l2.7-4.1L7.6 9h1.8l1.6 2.6L12.6 9h1.8l-2.5 3.9 2.7 4.1h-1.8ZM13 9V3.5L18.5 9H13Z"/></svg>
             Open in Excel
-          </a>
+          </button>
         </div>
       </div>
-      <p class="sub">Click or tap any cell to edit it. Changes save automatically.</p>
-      <div class="sheet-wrap">
-        <table class="sheet">
-          <thead>
-            <tr>
-              <th class="col-date">Date</th>
-              <th class="col-ini">Initials</th>
-              <th>Start Location</th>
-              <th>End Location</th>
-              <th class="col-prog">Program</th>
-              <th class="col-num">Odometer Start</th>
-              <th class="col-num">Odometer End</th>
-              <th class="col-miles">Miles</th>
-              <th><span class="visually-hidden" aria-label="Actions"></span></th>
-            </tr>
-          </thead>
-          <tbody id="sheet-body"></tbody>
-        </table>
+
+      <div class="sheet-controls">
+        <div class="field">
+          <label for="o-by">Organize by</label>
+          <select id="o-by">
+            <option value="">Nothing (date order)</option>
+            <option value="program">Program</option>
+            <option value="endLocation">End location (client)</option>
+            <option value="startLocation">Start location</option>
+            <option value="initials">Initials</option>
+            <option value="date">Date</option>
+            <option value="odometerStart">Odometer start</option>
+            <option value="odometerEnd">Odometer end</option>
+            <option value="miles">Miles</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="o-order">Dates</label>
+          <select id="o-order">
+            <option value="asc">Oldest first</option>
+            <option value="desc">Newest first</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="o-rows">Rows per spreadsheet</label>
+          <input id="o-rows" type="number" inputmode="numeric" min="1" max="5000" step="1" placeholder="All rows">
+        </div>
+        <label class="check" id="o-split-wrap">
+          <input type="checkbox" id="o-split" checked>
+          <span>Start a new spreadsheet for each <b id="o-split-name">group</b></span>
+        </label>
       </div>
+
+      <div class="template-box">
+        <div class="template-info">
+          <strong>Template</strong>
+          <span id="t-status">None. Excel files use the standard layout.</span>
+          <span class="hint" id="t-detail">Upload your own Excel form and it will be filled in automatically.</span>
+        </div>
+        <div class="actions">
+          <input type="file" id="t-file" accept=".xlsx,.xls,.xlsm" hidden>
+          <button class="btn btn-ghost" type="button" id="t-upload">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14v-2H5v2Zm4-4h6v-6h4l-7-7-7 7h4v6Z"/></svg>
+            <span id="t-upload-label">Upload template</span>
+          </button>
+          <button class="btn btn-ghost" type="button" id="t-use-cap" hidden></button>
+          <button class="btn btn-ghost" type="button" id="t-remove" hidden>Remove</button>
+        </div>
+      </div>
+
+      <div class="parts-summary" id="parts-summary" hidden>
+        <span id="parts-count"></span>
+        <div class="actions">
+          <button class="btn btn-ghost" type="button" id="zip-csv">Download all as CSV (.zip)</button>
+          <button class="btn btn-primary" type="button" id="zip-xlsx">Download all for Excel (.zip)</button>
+        </div>
+      </div>
+
+      <p class="sub">Click or tap any cell to edit it. Changes save automatically.</p>
+      <div id="sheet-parts"></div>
       <p class="empty" id="sheet-empty" hidden>No trips yet. Log your first trip from the Daily Log tab.</p>
     </div>
   </section>

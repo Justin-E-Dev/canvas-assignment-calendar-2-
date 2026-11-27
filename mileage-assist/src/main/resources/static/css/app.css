@@ -206,3 +206,38 @@ table.sheet { border-collapse: collapse; width: 100%; min-width: 1020px; font-si
   .sheet-toolbar .actions .btn { flex: 1; }
 }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* ---------- Spreadsheet organizing / templates ---------- */
+.sheet-controls {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 14px; align-items: end;
+  padding: 14px; background: var(--grey-light); border-radius: 8px; margin-bottom: 12px;
+}
+.sheet-controls .field input, .sheet-controls .field select { background: #fff; }
+.check { display: flex; align-items: center; gap: 8px; font-size: .9rem; color: var(--grey-dark); padding-bottom: 10px; cursor: pointer; }
+.check input { width: 18px; height: 18px; accent-color: var(--green); }
+.check.off { opacity: .45; cursor: default; }
+.template-box {
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 12px 14px; border: 1px dashed var(--grey-light-2); border-left: 4px solid var(--green);
+  border-radius: 8px; margin-bottom: 14px;
+}
+.template-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.template-info strong { color: var(--grey-dark); }
+.template-info span { overflow-wrap: anywhere; }
+.parts-summary {
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px;
+  background: var(--grey-dark); color: #fff; padding: 12px 14px; border-radius: 8px; margin-bottom: 14px;
+}
+.parts-summary b { color: var(--green-soft); }
+.part + .part { margin-top: 22px; }
+.part-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
+.part-head h3 { margin: 0; font-size: 1.05rem; color: var(--grey-dark); }
+.part-meta { font-size: .85rem; color: var(--grey-mid); }
+.part-meta b { color: var(--green); }
+.btn-sm { padding: 7px 12px; font-size: .85rem; }
+@media (max-width: 720px) {
+  .sheet-controls { grid-template-columns: 1fr 1fr; }
+  .sheet-controls .check { grid-column: 1 / -1; padding-bottom: 0; }
+  .parts-summary .actions, .template-box .actions { width: 100%; }
+  .parts-summary .btn, .template-box .btn { flex: 1; }
+}

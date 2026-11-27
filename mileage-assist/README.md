@@ -10,6 +10,10 @@ It uses no AI and no paid services at runtime: everything runs on your own serve
   location, odometer start and end, date filled in automatically, trip miles calculated.
 - Spreadsheet view: every trip in an editable grid (click/tap a cell, saves automatically),
   **Export as CSV**, and **Open in Excel** (downloads a native `.xlsx`).
+- Organize the spreadsheet by any column (program, client, initials, date, ...), set how many
+  rows go in each spreadsheet, and start a new spreadsheet for each group. Every spreadsheet has its
+  own CSV / Excel buttons, plus "download all" as a .zip.
+- Upload your own Excel form as a **template**; downloads fill it in automatically (see below).
 - Installable on phones as a home-screen app (web app manifest).
 
 ## Security
@@ -24,6 +28,20 @@ It uses no AI and no paid services at runtime: everything runs on your own serve
 | Data at rest | H2 database file encrypted with AES |
 | Browser | Strict Content-Security-Policy (no inline scripts), no framing, no referrer |
 | Exports | CSV cells starting with `= + - @` are neutralised against formula injection |
+
+## Spreadsheet templates
+Upload any `.xlsx` / `.xls` form. The app looks for a row of column headings and fills one trip per
+row underneath, keeping your formatting and formulas. Recognised headings include:
+Date · Initials · From / Start Location · To / End Location / Client / Destination · Program ·
+Beginning / Start Odometer · Ending / End Odometer · Miles / Total Miles.
+
+- If the form has a **Total** row, the rows above it set how many trips fit ("room for 12 rows");
+  extra trips go onto copies of the sheet (new tabs).
+- A cell labelled `Program:` or `Initials:` above the headings gets the value filled in next to it.
+- Optional placeholders anywhere in the form: `{{name}}`, `{{program}}`, `{{initials}}`,
+  `{{total miles}}`, `{{start date}}`, `{{end date}}`, `{{month}}`, `{{today}}`, `{{sheet}}`, `{{sheets}}`.
+
+The template is stored in the encrypted database, one per user.
 
 ## Run locally
 Requires Java 21 and Maven.

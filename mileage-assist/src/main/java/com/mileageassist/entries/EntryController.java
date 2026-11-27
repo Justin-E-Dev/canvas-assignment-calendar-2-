@@ -6,10 +6,7 @@ import java.security.Principal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
-import org.springframework.http.ContentDisposition;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
@@ -78,27 +75,6 @@ public class EntryController {
     public ResponseEntity<Void> forgetProgram(@PathVariable String value, Principal p) {
         entries.forgetProgram(userId(p), value);
         return ResponseEntity.noContent().build();
-    }
-
-    @GetMapping("/export/csv")
-    public ResponseEntity<byte[]> csv(Principal p) {
-        return download(SpreadsheetExport.csv(entries.findAll(userId(p))), "csv",
-                MediaType.parseMediaType("text/csv; charset=UTF-8"));
-    }
-
-    @GetMapping("/export/xlsx")
-    public ResponseEntity<byte[]> xlsx(Principal p) {
-        return download(SpreadsheetExport.xlsx(entries.findAll(userId(p))), "xlsx",
-                MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
-    }
-
-    private static ResponseEntity<byte[]> download(byte[] body, String ext, MediaType type) {
-        return ResponseEntity.ok()
-                .contentType(type)
-                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
-                        .filename("mileage-" + LocalDate.now() + "." + ext).build().toString())
-                .header(HttpHeaders.CACHE_CONTROL, "no-store")
-                .body(body);
     }
 
     private static ResponseEntity<?> odometerError() {
