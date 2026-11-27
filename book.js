@@ -401,32 +401,40 @@
     };
   }
 
-  function renderStudy(study, ch) {
-    $("conceptsBody").innerHTML = `<ol class="concepts">${study.keyConcepts.map((k, n) => `
+  function renderConcepts(list) {
+    $("conceptsBody").innerHTML = `<ol class="concepts">${list.map((k, n) => `
       <li class="concept"><span class="concept-num">${n + 1}</span>
         <div><h4>${inline(k.title)}</h4><p>${inline(k.text)}</p></div></li>`).join("")}</ol>`;
     $("conceptsBody").scrollTop = 0;
-    $("statCards").textContent = study.flashcards.length;
-    $("flashcards").classList.toggle("is-empty", !study.flashcards.length);
-    if (study.flashcards.length) setupFlashcards($("flashcards"), study.flashcards);
-    setupQuiz($("quiz"), study.quiz, `${entry.id}:${ch.number}`);
+  }
+  function renderCards(list) {
+    $("statCards").textContent = list.length;
+    $("flashcards").classList.toggle("is-empty", !list.length);
+    if (list.length) setupFlashcards($("flashcards"), list);
+    else $("flashEmpty").innerHTML = `<p class="empty">No flashcards.</p>`;
+  }
+  function renderQuiz(list, ch) {
+    setupQuiz($("quiz"), list, `${entry.id}:${ch.number}`);
     $("quiz").querySelector(".quiz-scroll").scrollTop = 0;
     updateStats();
   }
-
-  function studyLoading(text) {
-    $("conceptsBody").innerHTML = waiting(text);
-    $("flashcards").classList.add("is-empty");
-    $("flashEmpty").innerHTML = waiting(text);
-    $("quiz").querySelector(".quiz-list").innerHTML = `<li>${waiting(text)}</li>`;
-    $("quiz").querySelector(".quiz-score").textContent = "";
-    $("statCards").textContent = "–";
+  function renderStudy(study, ch) {
+    renderConcepts(study.keyConcepts || []);
+    renderCards(study.flashcards || []);
+    renderQuiz(study.quiz || [], ch);
   }
 
+  // Panel-by-panel "writing…" and error states.
+  const PANEL = {
+    concepts: (html) => ($("conceptsBody").innerHTML = html),
+    flashcards: (html) => { $("flashcards").classList.add("is-empty"); $("flashEmpty").innerHTML = html; $("statCards").textContent = "–"; },
+    quiz: (html) => { $("quiz").querySelector(".quiz-list").innerHTML = `<li>${html}</li>`; $("quiz").querySelector(".quiz-score").textContent = ""; },
+  };
+  function studyLoading(text) {
+    Object.values(PANEL).forEach((set) => set(waiting(text)));
+  }
   function studyError(err) {
-    $("conceptsBody").innerHTML = errorHtml(err);
-    $("flashEmpty").innerHTML = errorHtml(err);
-    $("quiz").querySelector(".quiz-list").innerHTML = `<li>${errorHtml(err)}</li>`;
+    Object.values(PANEL).forEach((set) => set(errorHtml(err)));
   }
 
   // Built-in notes: two files per chapter.
@@ -450,8 +458,8 @@
   }
 
   // Gemini notes: written the first time you open a chapter, then saved in this browser.
-  // A whole chapter takes too long for one request, so: outline first, then each
-  // section separately (two at a time), filling in as they finish.
+  // Outline first; then each section is streamed onto the page as Gemini writes it.
+  // Each request stops after 45 s and the page asks Gemini to continue where it left off.
   const chapterStore = (ch) => (genBook().content[ch.number] ||= {});
 
   async function runPool(items, limit, fn) {
@@ -462,46 +470,123 @@
     await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
   }
 
+  // Make sure a section starts with its own "## " heading and has no other "## " headings.
+  function tidySection(md, sec) {
+    let text = String(md || "").replace(/^\s*#\s[^\n]*\n+/, "").trim();
+    const heading = `## ${[sec.number, sec.title].filter(Boolean).join(" ")}`;
+    if (!/^##\s/.test(text)) text = `${heading}\n\n${text}`;
+    const lines = text.split("\n");
+    return [lines[0], ...lines.slice(1).map((l) => l.replace(/^##\s/, "### "))].join("\n");
+  }
+
   function assembleNotes(ch, c) {
     const parts = c.outline.sections.map((_, n) => c.sections[n]);
     return `# Chapter ${ch.number}: ${ch.title}\n\n${c.outline.intro}\n\n${parts.join("\n\n")}`;
   }
 
+  // One streamed request: calls onText for each piece; returns "done" or "more".
+  async function streamOnce(payload, onText) {
+    let res;
+    try {
+      res = await fetch("/api/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload, action: "stream", book: { ...book, course } }),
+        signal: AbortSignal.timeout(65000),
+      });
+    } catch (e) {
+      const err = new Error(e && e.name === "TimeoutError" ? "Gemini didn't answer in time." : "Couldn't reach the website. Check your internet connection.");
+      err.retryAfter = 5;
+      throw err;
+    }
+    if (!res.ok || !res.body) {
+      let data = null;
+      try {
+        data = await res.json();
+      } catch {
+        /* not JSON */
+      }
+      const err = new Error((data && data.error) || (res.status === 404 ? "Automatic notes only work on the live website." : `Something went wrong (error ${res.status}).`));
+      err.setup = !!(data && data.setup);
+      if (data && data.retryAfter) err.retryAfter = data.retryAfter;
+      else if (res.status === 504 || res.status >= 500) err.retryAfter = 5;
+      throw err;
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      let chunk;
+      try {
+        chunk = await reader.read();
+      } catch {
+        return "more"; // connection dropped: keep what we have and continue
+      }
+      if (chunk.done) return "more";
+      buf += decoder.decode(chunk.value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line) continue;
+        let ev;
+        try {
+          ev = JSON.parse(line);
+        } catch {
+          continue;
+        }
+        if (ev.t) onText(ev.t);
+        if (ev.done) return "done";
+        if (ev.more) return "more";
+        if (ev.error) {
+          const err = new Error(ev.error);
+          err.retryAfter = ev.retryAfter;
+          err.setup = !!ev.setup;
+          throw err;
+        }
+      }
+    }
+  }
+
   async function writeNotes(ch, token) {
     const c = chapterStore(ch);
+    const live = () => token === showToken;
     if (c.markdown) {
-      if (token === showToken) renderNotes(c.markdown);
+      if (live()) renderNotes(c.markdown);
       return;
     }
-    const live = () => token === showToken;
-    const label = `Chapter ${ch.number}`;
     if (!c.outline) {
       if (live()) {
-        $("notesBody").innerHTML = waiting(`Gemini is outlining ${esc(label)}…`);
+        $("notesBody").innerHTML = waiting(`Gemini is outlining Chapter ${esc(ch.number)}…`);
         $("sectionJump").classList.add("hidden");
       }
       c.outline = await gemini({ action: "outline", chapter: ch }, (secs) => {
-        if (live()) $("notesBody").innerHTML = waiting(`Waiting ${secs}s for Gemini's free per-minute limit…`);
+        if (live()) $("notesBody").innerHTML = waiting(`Waiting ${secs}s for Gemini, then trying again…`);
       });
       c.sections = {};
+      c.partial = {};
       saveGen();
     }
     c.sections ||= {};
+    c.partial ||= {};
     const secs = c.outline.sections;
     const all = secs.map((x) => ({ number: x.number, title: x.title }));
+    const secName = (n) => esc([secs[n].number, secs[n].title].filter(Boolean).join(" "));
 
-    // Skeleton: intro, then one block per section (finished, or "writing…").
+    // Skeleton: intro, then one block per section.
     const blockHtml = (n) => c.sections[n]
       ? renderMarkdown(c.sections[n]).html
-      : waiting(`Writing ${esc([secs[n].number, secs[n].title].filter(Boolean).join(" "))}…`);
+      : c.partial[n]
+        ? renderMarkdown(tidySection(c.partial[n], secs[n])).html + `<p class="typing">Writing…</p>`
+        : waiting(`Waiting to write ${secName(n)}…`);
     if (live()) {
       $("notesBody").innerHTML = `<section class="note-section intro"><p>${inline(c.outline.intro)}</p></section>` +
         secs.map((_, n) => `<div class="gen-sec" id="gsec-${n}">${blockHtml(n)}</div>`).join("") +
-        `<p class="notes-foot" id="genFoot">Writing the rest of this chapter… sections appear as they're finished.</p>`;
+        `<p class="notes-foot" id="genFoot">Writing this chapter… sections appear as Gemini writes them.</p>`;
       $("notesBody").scrollTop = 0;
       $("sectionJump").classList.remove("hidden");
       $("sectionJump").innerHTML = `<option value="">Jump to section…</option>` +
-        secs.map((x, n) => `<option value="gsec-${n}">${esc([x.number, x.title].filter(Boolean).join(" "))}</option>`).join("");
+        secs.map((x, n) => `<option value="gsec-${n}">${secName(n)}</option>`).join("");
       $("sectionJump").onchange = () => {
         const target = document.getElementById($("sectionJump").value);
         if (target) $("notesBody").scrollTo({ top: target.offsetTop - $("notesBody").offsetTop - 8, behavior: "smooth" });
@@ -511,25 +596,61 @@
 
     let failed = 0;
     const writeSection = async (n) => {
+      let text = c.partial[n] || "";
+      let lastPaint = 0;
+      const paint = (note) => {
+        const el = block(n);
+        if (el) el.innerHTML = (text ? renderMarkdown(tidySection(text, secs[n])).html : "") +
+          (note ? `<p class="typing">${note}</p>` : "");
+      };
+      if (!text) {
+        const el = block(n);
+        if (el) el.innerHTML = waiting(`Writing ${secName(n)}…`);
+      }
+      let retries = 0;
       try {
-        const out = await gemini({ action: "section", chapter: ch, section: secs[n], allSections: all }, (wait) => {
-          const el = block(n);
-          if (el) el.innerHTML = waiting(`Waiting ${wait}s for Gemini's free per-minute limit…`);
-        });
-        c.sections[n] = out.markdown;
+        for (let round = 0; round < 12; round++) {
+          let status;
+          try {
+            status = await streamOnce({ chapter: ch, section: secs[n], allSections: all, soFar: text }, (t) => {
+              text += t;
+              c.partial[n] = text;
+              if (Date.now() - lastPaint > 250) {
+                lastPaint = Date.now();
+                paint("Writing…");
+                saveGen();
+              }
+            });
+          } catch (err) {
+            if (!err.retryAfter || retries >= 5) throw err;
+            retries++;
+            paint(`${esc(err.message)} Trying again in ${err.retryAfter}s…`);
+            if (!text) {
+              const el = block(n);
+              if (el) el.innerHTML = waiting(`${esc(err.message)} Trying again in ${err.retryAfter}s…`);
+            }
+            await sleep(err.retryAfter * 1000);
+            continue;
+          }
+          c.partial[n] = text;
+          saveGen();
+          if (status === "done") break;
+          paint("Continuing…");
+        }
+        if (!text.replace(/^\s*#{1,3}\s[^\n]*\n?/, "").trim()) throw new Error("Gemini didn't write anything for this section.");
+        c.sections[n] = tidySection(text, secs[n]);
+        delete c.partial[n];
         saveGen();
         const el = block(n);
-        if (el) el.innerHTML = renderMarkdown(out.markdown).html;
+        if (el) el.innerHTML = renderMarkdown(c.sections[n]).html;
       } catch (err) {
         failed++;
         const el = block(n);
         if (el) {
-          el.innerHTML = `<div class="writing failed"><p><strong>${esc([secs[n].number, secs[n].title].filter(Boolean).join(" "))}</strong>: ${esc(err.message)}</p>
-            <button class="pill-btn" type="button">Retry</button></div>`;
-          el.querySelector("button").onclick = () => {
-            el.innerHTML = blockHtml(n);
-            writeNotes(ch, showToken);
-          };
+          el.innerHTML = (text ? renderMarkdown(tidySection(text, secs[n])).html : "") +
+            `<div class="writing failed"><p><strong>${secName(n)}</strong>: ${esc(err.message)}</p>
+            <button class="pill-btn" type="button">${text ? "Continue writing" : "Retry"}</button></div>`;
+          el.querySelector("button").onclick = () => writeNotes(ch, showToken);
         }
       }
     };
@@ -538,26 +659,53 @@
 
     if (secs.every((_, n) => c.sections[n])) {
       c.markdown = assembleNotes(ch, c);
+      delete c.partial;
       saveGen();
       const foot = live() && $("genFoot");
       if (foot) foot.textContent = entry.source;
     } else if (live() && $("genFoot")) {
-      $("genFoot").textContent = `${failed} section${failed === 1 ? "" : "s"} couldn't be written. Use Retry on ${failed === 1 ? "it" : "them"}.`;
+      $("genFoot").textContent = `${failed} section${failed === 1 ? "" : "s"} couldn't be finished. Use the button on ${failed === 1 ? "it" : "them"}, or Regenerate chapter at the top.`;
     }
   }
 
+  // Key concepts, flashcards and quiz: three smaller requests, each shown when ready.
   async function writeStudy(ch, token) {
     const c = chapterStore(ch);
     const live = () => token === showToken;
-    if (!c.study) {
-      if (live()) studyLoading(`Writing key concepts, flashcards and quiz for Chapter ${esc(ch.number)}…`);
-      const s = await gemini({ action: "study", chapter: ch }, (secs) => {
-        if (live()) studyLoading(`Waiting ${secs}s for Gemini's free per-minute limit…`);
-      });
-      c.study = { keyConcepts: s.keyConcepts, flashcards: s.flashcards, quiz: s.quiz };
-      saveGen();
+    c.study ||= {};
+    const parts = [
+      ["concepts", "keyConcepts", "key concepts", (v) => renderConcepts(v)],
+      ["flashcards", "flashcards", "flashcards", (v) => renderCards(v)],
+      ["quiz", "quiz", "quiz", (v) => renderQuiz(v, ch)],
+    ];
+    for (const [part, key, label] of parts) {
+      if (live()) PANEL[part](c.study[key] ? "" : waiting(`Waiting to write the ${label}…`));
     }
-    if (live()) renderStudy(c.study, ch);
+    for (const [part, key, label, show] of parts) {
+      if (c.study[key]) {
+        if (live()) show(c.study[key]);
+        continue;
+      }
+      if (live()) PANEL[part](waiting(`Gemini is writing the ${label}…`));
+      try {
+        const out = await gemini({ action: "study", part, chapter: ch }, (secs) => {
+          if (live()) PANEL[part](waiting(`Waiting ${secs}s for Gemini, then trying again…`));
+        });
+        if (!out[key] || !out[key].length) throw new Error(`Gemini didn't write any ${label}.`);
+        c.study[key] = out[key];
+        saveGen();
+        if (live()) show(out[key]);
+      } catch (err) {
+        if (live()) {
+          PANEL[part](errorHtml(err) + `<p><button class="pill-btn study-retry" type="button">Retry</button></p>`);
+          const btn = document.querySelector(".study-retry:not([data-bound])");
+          if (btn) {
+            btn.dataset.bound = "1";
+            btn.onclick = () => writeStudy(ch, showToken);
+          }
+        }
+      }
+    }
   }
 
   async function showGenerated(ch, token, rewrite) {
@@ -573,9 +721,7 @@
           $("notesRetry").onclick = () => showChapter(current);
         }
       }),
-      writeStudy(ch, token).catch((err) => {
-        if (token === showToken) studyError(err);
-      }),
+      writeStudy(ch, token),
     ]);
   }
 
@@ -609,9 +755,13 @@
     $("chapterSelect").innerHTML = entry.chapters
       .map((ch, i) => `<option value="${i}">Chapter ${esc(ch.number)}: ${esc(ch.title)}</option>`).join("");
     $("chapterSelect").onchange = () => showChapter(Number($("chapterSelect").value));
-    $("rewriteBtn").classList.toggle("hidden", !entry.generated);
-    $("rewriteBtn").onclick = () => {
-      if (current !== null && confirm("Ask Gemini to write this chapter again? The current version will be replaced.")) showChapter(current, true);
+    $("regenBtn").classList.toggle("hidden", !entry.generated);
+    $("regenBtn").onclick = () => {
+      if (current === null) return;
+      const ch = entry.chapters[current];
+      if (confirm(`Regenerate Chapter ${ch.number}? Everything Gemini wrote for this chapter (notes, key concepts, flashcards and quiz) will be deleted and written again.`)) {
+        showChapter(current, true);
+      }
     };
 
     window.addEventListener("hashchange", () => {

@@ -448,3 +448,24 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .gen-sec > .note-section.intro:empty { display: none; }
 .writing.failed { flex-direction: column; align-items: flex-start; background: color-mix(in srgb, var(--red) 8%, var(--card)); }
 .writing.failed p { color: var(--text); }
+
+/* Top bar: regenerate this chapter */
+.top-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  margin-left: auto;
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.top-btn:hover { background: rgba(255, 255, 255, 0.22); }
+.typing { margin: 6px 0 0; font-size: 0.8rem; color: var(--muted); font-style: italic; }
+@media (max-width: 480px) { .top-btn { margin-left: 0; justify-content: center; } }

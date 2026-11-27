@@ -4,7 +4,11 @@
 //   { action: "chapters", book }            -> the book's chapter list
 //   { action: "outline",  book, chapter }   -> intro paragraph + the chapter's sections
 //   { action: "section",  book, chapter, section, allSections } -> notes for one section
-//   { action: "study",    book, chapter }   -> key concepts, flashcards, quiz
+//   { action: "study",    book, chapter, part } -> key concepts, flashcards or quiz
+//   { action: "stream",   book, chapter, section, allSections, soFar }
+//        -> notes for one section, streamed as they're written (one JSON object per
+//           line: {"t":"text"} … then {"done":true} or {"more":true}). Each request
+//           stops after 45 s; the page then asks again with soFar to continue.
 //   { action: "notes",    book, chapter }   -> (older) a whole chapter at once
 //
 // A whole chapter is too long to write within Vercel's 60-second limit, so the
@@ -45,6 +49,13 @@ const SCHEMAS = {
     sections: S("ARRAY", { items: obj({ number: S("STRING"), title: S("STRING"), focus: S("STRING") }) }),
   }),
   section: obj({ markdown: S("STRING") }),
+  concepts: obj({ keyConcepts: S("ARRAY", { items: obj({ title: S("STRING"), text: S("STRING") }) }) }),
+  flashcards: obj({ flashcards: S("ARRAY", { items: obj({ front: S("STRING"), back: S("STRING") }) }) }),
+  quiz: obj({
+    quiz: S("ARRAY", {
+      items: obj({ q: S("STRING"), options: S("ARRAY", { items: S("STRING") }), answer: S("INTEGER"), explain: S("STRING") }),
+    }),
+  }),
   study: obj({
     keyConcepts: S("ARRAY", { items: obj({ title: S("STRING"), text: S("STRING") }) }),
     flashcards: S("ARRAY", { items: obj({ front: S("STRING"), back: S("STRING") }) }),
@@ -87,8 +98,42 @@ const describe = (b) => [
   b.course && `The student's course: ${b.course}`,
 ].filter(Boolean).join("\n");
 
-function prompts(action, book, chapter, section, allSections) {
+const STUDY_PARTS = {
+  concepts: `"keyConcepts": 8-12 of the chapter's most important ideas, each with a short "title" and 1-3 sentence "text" (**bold** allowed).`,
+  flashcards: `"flashcards": 20-25 cards, each with a "front" (question or term) and "back" (short answer or definition).`,
+  quiz: `"quiz": 12 multiple-choice questions. Each has "q", exactly 4 different plausible "options", "answer" (the index 0-3 of the correct option) and a one-sentence "explain".`,
+};
+
+function prompts(action, book, chapter, section, allSections, extra = {}) {
   const ch = chapter && `Chapter ${chapter.number}${chapter.title ? `: ${chapter.title}` : ""}`;
+  if (action === "study" && extra.part) {
+    return `${describe(book)}
+
+Write study tools for ${ch}:
+${STUDY_PARTS[extra.part]}`;
+  }
+  if (action === "stream") {
+    const base = `${describe(book)}
+
+You're writing study notes for ${ch}, one section at a time. The chapter's sections are:
+${allSections.map((x) => `- ${x.number} ${x.title}`).join("\n")}
+
+Write the notes for section ${section.number} ${section.title} only${section.focus ? ` (it covers: ${section.focus})` : ""}.
+About 400-700 words, explaining everything a student needs to understand this section, with examples, formulas or step-by-step processes where the topic has them.
+Write plain Markdown using ONLY this format:
+- First line exactly: "## ${section.number} ${section.title}"
+- Then paragraphs, bullet lists ("- "), numbered lists ("1. "), one level of nested bullets (indent 2 spaces), **bold** for key terms, \`code\` for formulas. "### " for sub-headings.
+- No "# " heading, no other "## " headings, no tables, images, links or HTML. Blank line between paragraphs.
+- Don't repeat material that belongs to the other sections. Output only the notes, nothing else.`;
+    if (!extra.soFar) return base;
+    return `${base}
+
+You already started writing this section. Here is everything written so far:
+<<<
+${extra.soFar}
+>>>
+Continue EXACTLY where it stops (even mid-sentence). Don't repeat anything above, don't restart the section and don't add the heading again. If the section is already complete, reply with nothing.`;
+  }
   if (action === "outline") {
     return `${describe(book)}
 
@@ -154,13 +199,13 @@ class GeminiError extends Error {
 const thinkingFor = (model) => (/2\.5/.test(model) ? { thinkingBudget: 0 } : { thinkingLevel: "low" });
 
 async function callModel(model, action, text, deadline, opts = {}) {
-  // One slow model can't use up all the time: short jobs get 1 minute, writing gets 4.
-  const perModel = action === "chapters" || action === "outline" ? 60000 : 240000;
+  const schemaKey = opts.schemaKey || action;
+  const perModel = 40000; // one slow model can't use up all the time
   const timeLeft = Math.min(perModel, deadline - Date.now());
   if (timeLeft < 3000) throw new GeminiError(504, "Ran out of time", "timeout");
   const generationConfig = {
     responseMimeType: "application/json",
-    responseSchema: SCHEMAS[action],
+    responseSchema: SCHEMAS[schemaKey],
     temperature: 0.4,
     maxOutputTokens: opts.maxOutputTokens || 16384,
   };
@@ -238,14 +283,14 @@ async function modelOrder() {
   return order.length ? order : MODELS;
 }
 
-async function ask(action, text) {
-  const deadline = Date.now() + 285000; // Vercel stops the function at 300 s (5 minutes)
+async function ask(action, text, opts = {}) {
+  const deadline = Date.now() + 45000; // every request answers within 45 s
   const base = workingModel ? [workingModel] : [];
   const order = [...new Set([...base, ...(await modelOrder())])];
   let last;
   for (const model of order) {
     try {
-      const result = await callModel(model, action, text, deadline);
+      const result = await callModel(model, action, text, deadline, opts);
       workingModel = model;
       return { result, model };
     } catch (err) {
@@ -253,10 +298,115 @@ async function ask(action, text) {
       if (!(err instanceof GeminiError)) throw err;
       // Unavailable, too slow or overloaded: try the next model if there's time.
       if (!["model", "timeout", "busy"].includes(err.kind)) throw err;
-      if (deadline - Date.now() < 15000) break;
+      if (deadline - Date.now() < 8000) break;
     }
   }
   throw last || new GeminiError(502, "No Gemini model available", "other");
+}
+
+// ---------- Streaming one section of notes (stops after 45 s) ----------
+async function streamSection(res, text) {
+  res.statusCode = 200;
+  res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("X-Accel-Buffering", "no");
+  const send = (obj) => res.write(JSON.stringify(obj) + "\n");
+  const stopAt = Date.now() + 45000;
+  const order = [...new Set([...(workingModel ? [workingModel] : []), ...(await modelOrder())])];
+  let lastErr = null;
+
+  for (const model of order) {
+    if (stopAt - Date.now() < 8000) break;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), stopAt - Date.now());
+    let wrote = false;
+    try {
+      const body = (withThinking) => JSON.stringify({
+        systemInstruction: { parts: [{ text: SYSTEM }] },
+        contents: [{ role: "user", parts: [{ text }] }],
+        generationConfig: { temperature: 0.4, maxOutputTokens: 4096, ...(withThinking ? { thinkingConfig: thinkingFor(model) } : {}) },
+      });
+      const url = `${API}/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`;
+      const headers = { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY };
+      let r = await fetch(url, { method: "POST", headers, body: body(true), signal: controller.signal });
+      if (r.status === 400) {
+        const msg = await r.text();
+        if (/thinking/i.test(msg)) r = await fetch(url, { method: "POST", headers, body: body(false), signal: controller.signal });
+        else throw new GeminiError(400, msg.slice(0, 300), /model|not supported|not found/i.test(msg) ? "model" : "other");
+      }
+      if (!r.ok) {
+        const msg = (await r.text()).slice(0, 400);
+        if (r.status === 404 || (r.status === 429 && /limit:\s*0\b/i.test(msg))) throw new GeminiError(r.status, msg, "model");
+        if (r.status === 429) throw new GeminiError(429, msg, "quota");
+        if (r.status === 403) throw new GeminiError(403, msg, "key");
+        throw new GeminiError(r.status >= 500 ? 503 : 502, msg, r.status >= 500 ? "busy" : "other");
+      }
+      workingModel = model;
+      const reader = r.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      let finish = null;
+      try {
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          let nl;
+          while ((nl = buf.indexOf("\n")) >= 0) {
+            const line = buf.slice(0, nl).trim();
+            buf = buf.slice(nl + 1);
+            if (!line.startsWith("data:")) continue;
+            let ev;
+            try {
+              ev = JSON.parse(line.slice(5));
+            } catch {
+              continue;
+            }
+            const cand = (ev.candidates || [])[0] || {};
+            const t = ((cand.content || {}).parts || []).filter((p) => !p.thought).map((p) => p.text || "").join("");
+            if (t) {
+              wrote = true;
+              send({ t });
+            }
+            if (cand.finishReason) finish = cand.finishReason;
+          }
+        }
+      } catch (e) {
+        if (!(e && e.name === "AbortError")) throw e;
+        // 45 s are up: send what we have; the page asks for the rest.
+        clearTimeout(timer);
+        send({ more: true, model });
+        return res.end();
+      }
+      clearTimeout(timer);
+      if (finish === "MAX_TOKENS") send({ more: true, model });
+      else if (finish && finish !== "STOP") send({ error: `Gemini stopped early (${finish}). Try again.`, model });
+      else send({ done: true, model });
+      return res.end();
+    } catch (e) {
+      clearTimeout(timer);
+      if (wrote) {
+        // Something broke midway: keep what was written and continue next time.
+        send({ more: true, model });
+        return res.end();
+      }
+      lastErr = e && e.name === "AbortError" ? new GeminiError(504, "Gemini took too long", "timeout") : e;
+      if (!(lastErr instanceof GeminiError) || !["model", "timeout", "busy"].includes(lastErr.kind)) break;
+    }
+  }
+  const err = lastErr instanceof GeminiError ? lastErr : new GeminiError(502, String(lastErr && lastErr.message), "other");
+  const wait = Number((String(err.message).match(/retry in ([\d.]+)s/i) || [])[1]);
+  send({
+    error: {
+      quota: "Gemini's free limit is used up for now.",
+      key: "The Gemini key in Vercel isn't working. Check GEMINI_API_KEY in the project's settings.",
+      timeout: "Gemini didn't start answering in time.",
+      busy: "Gemini is busy right now.",
+    }[err.kind] || "Gemini had a problem.",
+    retryAfter: err.kind === "quota" ? Math.min(60, Math.ceil(wait || 20)) : err.kind === "timeout" || err.kind === "busy" ? 5 : null,
+    setup: err.kind === "key",
+  });
+  return res.end();
 }
 
 // ---------- Diagnostics: open /api/gemini in a browser ----------
@@ -330,7 +480,8 @@ module.exports = async function handler(req, res) {
 
   const body = req.body || {};
   const action = body.action;
-  if (!["chapters", "outline", "section", "notes", "study"].includes(action)) return res.status(400).json({ error: "Unknown action." });
+  if (!["chapters", "outline", "section", "notes", "study", "stream"].includes(action)) return res.status(400).json({ error: "Unknown action." });
+  const part = ["concepts", "flashcards", "quiz"].includes(body.part) ? body.part : null;
   const book = readBook(body.book);
   if (!book) return res.status(400).json({ error: "Missing book details." });
   let chapter = null;
@@ -340,7 +491,7 @@ module.exports = async function handler(req, res) {
   }
   let section = null;
   let allSections = [];
-  if (action === "section") {
+  if (action === "section" || action === "stream") {
     const sec = body.section || {};
     section = { number: clip(sec.number, 20), title: clip(sec.title, 200), focus: clip(sec.focus, 400) };
     if (!section.title) return res.status(400).json({ error: "Missing section." });
@@ -349,10 +500,25 @@ module.exports = async function handler(req, res) {
     if (!allSections.length) allSections = [section];
   }
 
+  if (action === "stream") {
+    const soFar = clip(body.soFar, 24000);
+    try {
+      return await streamSection(res, prompts("stream", book, chapter, section, allSections, { soFar }));
+    } catch (err) {
+      console.error("stream error", err);
+      if (!res.headersSent) return res.status(502).json({ error: "Gemini had a problem. Please try again." });
+      res.write(JSON.stringify({ error: "Gemini had a problem. Please try again.", retryAfter: 5 }) + "\n");
+      return res.end();
+    }
+  }
+
   try {
-    const { result, model } = await ask(action, prompts(action, book, chapter, section, allSections));
+    const { result, model } = await ask(action, prompts(action, book, chapter, section, allSections, { part }), part ? { schemaKey: part } : {});
     let out = result;
-    if (action === "study") out = cleanStudy(result);
+    if (action === "study") {
+      const all = cleanStudy(result);
+      out = part ? { [{ concepts: "keyConcepts", flashcards: "flashcards", quiz: "quiz" }[part]]: all[{ concepts: "keyConcepts", flashcards: "flashcards", quiz: "quiz" }[part]] } : all;
+    }
     if (action === "section") {
       let md = String(result.markdown || "").trim().replace(/^#\s.*\n+/, "");
       const heading = `## ${[section.number, section.title].filter(Boolean).join(" ")}`;
@@ -385,10 +551,10 @@ module.exports = async function handler(req, res) {
     if (err instanceof SyntaxError) return res.status(502).json({ error: "Gemini sent back an unreadable answer. Try again." });
     if (err instanceof GeminiError) {
       if (err.kind === "timeout") {
-        return res.status(504).json({ error: "Gemini took too long to answer. Please try again; it's usually faster the second time." });
+        return res.status(504).json({ error: "Gemini took too long to answer.", retryAfter: 5 });
       }
       if (err.kind === "busy") {
-        return res.status(503).json({ error: "Gemini is busy right now. Please try again in a minute." });
+        return res.status(503).json({ error: "Gemini is busy right now.", retryAfter: 10 });
       }
       if (err.kind === "quota") {
         const wait = Number((String(err.message).match(/retry in ([\d.]+)s/i) || [])[1]);
@@ -410,5 +576,5 @@ module.exports = async function handler(req, res) {
   }
 };
 
-// Writing can take a while: allow up to 5 minutes (the most Vercel's free plan allows).
-module.exports.config = { maxDuration: 300 };
+// Every request finishes within about 45 s, so 60 s is plenty on any Vercel plan.
+module.exports.config = { maxDuration: 60 };

@@ -43,6 +43,10 @@
           <p id="topCourse" class="topbar-course"></p>
           <h1 id="topTitle">Book Dashboard</h1>
         </div>
+        <button id="regenBtn" class="top-btn hidden" type="button" title="Delete what Gemini wrote for this chapter and write it again">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+          Regenerate chapter
+        </button>
         <label class="mobile-chapter">
           <span class="sr-only">Chapter</span>
           <select id="chapterSelect"></select>
@@ -80,7 +84,6 @@
             <h3>Notes</h3>
             <div class="notes-tools">
               <select id="sectionJump" class="panel-select" aria-label="Jump to section"></select>
-              <button id="rewriteBtn" class="text-btn hidden" type="button" title="Ask Gemini to write this chapter again">Rewrite</button>
             </div>
           </header>
           <div id="notesBody" class="panel-body scroll"></div>
