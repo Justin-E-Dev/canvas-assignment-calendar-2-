@@ -309,6 +309,8 @@
   const genId = `${course}::${bookId}`;
   const genBook = () => (genStore[genId] ||= { content: {} });
   const saveGen = () => save(GEN_KEY, genStore);
+  const GEN_SOURCE = "Written automatically by Google's Gemini AI from its general knowledge of this book. It may not match your edition exactly; check anything important against your textbook.";
+  let notesSource = ""; // footer under the notes for the chapter on screen
 
   function updateStats() {
     if (!entry || current === null) return;
@@ -504,7 +506,18 @@
   // ---------- Showing one chapter ----------
   function renderNotes(markdown) {
     const { html, sections } = renderMarkdown(markdown);
-    $("notesBody").innerHTML = `${html}<p class="notes-foot">${esc(entry.source)}</p>`;
+    const shown = current !== null && entry.chapters[current];
+    const ownNotes = !entry.generated && notesSource === GEN_SOURCE && !!(shown && (genBook().content[shown.number] || {}).markdown);
+    $("notesBody").innerHTML = `${html}<p class="notes-foot">${esc(notesSource || entry.source)}${ownNotes
+      ? ` <button class="text-btn" id="originalBtn" type="button">Show the original notes again</button>` : ""}</p>`;
+    if (ownNotes) $("originalBtn").onclick = () => {
+      const ch = entry.chapters[current];
+      if (!confirm(`Go back to the original notes for Chapter ${ch.number}? Gemini's version of this chapter will be deleted.`)) return;
+      delete genBook().content[ch.number];
+      saveGen();
+      markWritten();
+      showChapter(current);
+    };
     $("notesBody").scrollTop = 0;
     $("sectionJump").classList.remove("hidden");
     $("sectionJump").innerHTML = `<option value="">Jump to section…</option>` +
@@ -783,7 +796,7 @@
       delete c.partial;
       saveGen();
       const foot = live() && $("genFoot");
-      if (foot) foot.textContent = entry.source;
+      if (foot) foot.textContent = notesSource || entry.source;
     } else if (live() && $("genFoot")) {
       $("genFoot").textContent = `${failed} section${failed === 1 ? "" : "s"} couldn't be finished. Use the button on ${failed === 1 ? "it" : "them"}, or Regenerate chapter at the top.`;
     }
@@ -954,7 +967,7 @@
   const bulk = { running: false, stop: false, at: null, queue: [] };
 
   function markWritten() {
-    if (!entry || !entry.generated) return;
+    if (!entry) return;
     document.querySelectorAll("#chapterNav button").forEach((b, j) => {
       const ch = entry.chapters[j];
       b.classList.toggle("written", !!(ch && (genBook().content[ch.number] || {}).markdown));
@@ -973,7 +986,7 @@
       return;
     }
     const total = entry.chapters.length;
-    if (!confirm(`Regenerate all ${total} chapters? Gemini will write each chapter again, one after another (about 1-3 minutes each). Finished chapters are saved as it goes; you can keep reading while it works.`)) return;
+    if (!confirm(`Regenerate all ${total} chapters? Gemini will write each chapter again, one after another (about 1-3 minutes each). Finished chapters are saved as it goes; you can keep reading while it works.${entry.generated ? "" : " Each chapter's original notes can be brought back with the link under its notes."}`)) return;
     Object.assign(bulk, { running: true, stop: false, at: null, queue: entry.chapters.map((_, i) => i) });
     $("regenBtn").disabled = true;
     const failed = [];
@@ -1053,7 +1066,10 @@
     $("statChapterTitle").textContent = ch.title;
     $("statScore").textContent = "–";
     try {
-      if (entry.generated) await showGenerated(ch, token, rewrite);
+      const c = genBook().content[ch.number] || {};
+      const gemini = entry.generated || rewrite || c.markdown || (bulk.running && bulk.at === i);
+      notesSource = gemini ? (entry.generated ? entry.source : GEN_SOURCE) : entry.source;
+      if (gemini) await showGenerated(ch, token, rewrite);
       else await showBuiltIn(ch, token);
     } catch (err) {
       if (token === showToken) $("notesBody").innerHTML = errorHtml(err);
@@ -1072,14 +1088,17 @@
     $("chapterSelect").innerHTML = entry.chapters
       .map((ch, i) => `<option value="${i}">Chapter ${esc(ch.number)}: ${esc(ch.title)}</option>`).join("");
     $("chapterSelect").onchange = () => showChapter(Number($("chapterSelect").value));
-    $("regenBtn").classList.toggle("hidden", !entry.generated);
-    $("regenAllBtn").classList.toggle("hidden", !entry.generated);
+    $("regenBtn").classList.remove("hidden");
+    $("regenAllBtn").classList.remove("hidden");
     $("regenAllBtn").onclick = regenerateAll;
     markWritten();
     $("regenBtn").onclick = () => {
       if (current === null) return;
       const ch = entry.chapters[current];
-      if (confirm(`Regenerate Chapter ${ch.number}? Everything Gemini wrote for this chapter (notes, key concepts, flashcards and quiz) will be deleted and written again.`)) {
+      const what = entry.generated || chapterStore(ch).markdown
+        ? "Everything Gemini wrote for this chapter (notes, key concepts, flashcards and quiz) will be deleted and written again."
+        : "Gemini will write new notes, key concepts, flashcards and a quiz for it. You can switch back to the original notes afterwards.";
+      if (confirm(`Regenerate Chapter ${ch.number}? ${what}`)) {
         showChapter(current, true);
       }
     };
