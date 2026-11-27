@@ -18,9 +18,10 @@ const RANGES = {
 };
 
 // Bold course colors, all dark enough for white text on top.
+// Soft, muted course colors: used only for small dots and stripes.
 const COLORS = [
-  "#4c4cf5", "#e0335f", "#0f8a5f", "#8a3ffc", "#d14d0f",
-  "#0a7ea4", "#b8327a", "#5a7d0a", "#c2410c", "#1f6feb",
+  "#6a85c9", "#c98a7a", "#6fa58b", "#9a8cc6", "#c9a46a",
+  "#6aa4ae", "#b98aa6", "#8f9f6a", "#b08b6e", "#7f94b0",
 ];
 
 // ---------- Storage helpers (browser storage can fail, so never crash) ----------
@@ -368,7 +369,31 @@ if (typeof document !== "undefined") {
     }
   }
 
+  // Summary cards: always about the current calendar week.
+  function renderStats() {
+    if (!$("statLeft")) return;
+    const today = new Date();
+    const start = startOfWeek(today);
+    const end = addDays(start, 7);
+    const week = state.events.filter((e) => e.due >= start && e.due < end);
+    const open = week.filter((e) => !state.done.has(e.id));
+    $("statLeft").textContent = open.length;
+    const mins = timeLeft(week);
+    $("statHours").textContent = mins ? fmtDuration(mins) : "0h";
+    $("statDone").textContent = `${week.length - open.length}/${week.length}`;
+    $("statCourses").textContent = Object.keys(state.courseColors).filter((c) => c !== "Other" || Object.keys(state.courseColors).length === 1).length;
+  }
+
+  function renderHeader() {
+    const now = new Date();
+    if ($("todayLabel")) $("todayLabel").textContent = now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+    const h = now.getHours();
+    if ($("greeting")) $("greeting").textContent = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  }
+
   function renderAll() {
+    renderHeader();
+    renderStats();
     renderWeek();
     renderUpcoming();
     renderCourses();
@@ -392,6 +417,7 @@ if (typeof document !== "undefined") {
     const view = location.hash === "#learn" ? "learn" : "board";
     $("boardView").classList.toggle("hidden", view !== "board");
     $("learnView").classList.toggle("hidden", view !== "learn");
+    if ($("viewTitle")) $("viewTitle").textContent = view === "learn" ? "Learning Center" : "Assignment Board";
     document.querySelectorAll("#tabs a").forEach((a) => {
       const on = a.dataset.view === view;
       a.classList.toggle("active", on);
