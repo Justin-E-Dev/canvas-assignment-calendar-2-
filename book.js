@@ -336,7 +336,22 @@
   }, 1000);
 
   // ---------- Asking Gemini (through this website's own server function) ----------
-  async function gemini(payload) {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // Ask Gemini; if the free per-minute limit is hit, wait and try again (up to 4 times).
+  async function gemini(payload, onWait) {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await geminiOnce(payload);
+      } catch (err) {
+        if (!err.retryAfter || attempt >= 4) throw err;
+        if (onWait) onWait(err.retryAfter);
+        await sleep(err.retryAfter * 1000);
+      }
+    }
+  }
+
+  async function geminiOnce(payload) {
     let res;
     try {
       res = await fetch("/api/gemini", {
@@ -362,6 +377,7 @@
         504: "Gemini took too long to answer. Please try again.",
       }[res.status] || `Something went wrong (error ${res.status}).`);
       err.setup = !!(data && data.setup);
+      if (res.status === 429 && data && data.retryAfter) err.retryAfter = data.retryAfter;
       throw err;
     }
     return data;
@@ -434,35 +450,132 @@
   }
 
   // Gemini notes: written the first time you open a chapter, then saved in this browser.
-  async function showGenerated(ch, token, rewrite) {
-    const saved = genBook().content[ch.number] || {};
-    const label = `Chapter ${ch.number}`;
+  // A whole chapter takes too long for one request, so: outline first, then each
+  // section separately (two at a time), filling in as they finish.
+  const chapterStore = (ch) => (genBook().content[ch.number] ||= {});
 
-    const notesJob = !rewrite && saved.markdown
-      ? Promise.resolve(saved.markdown)
-      : (async () => {
-          $("notesBody").innerHTML = waiting(`Gemini is writing the notes for ${esc(label)}… this usually takes 20–60 seconds.`);
-          $("sectionJump").classList.add("hidden");
-          return (await gemini({ action: "notes", chapter: ch })).markdown;
-        })();
-    const studyJob = !rewrite && saved.study
-      ? Promise.resolve(saved.study)
-      : (async () => {
-          studyLoading(`Writing key concepts, flashcards and quiz for ${esc(label)}…`);
-          const s = await gemini({ action: "study", chapter: ch });
-          return { keyConcepts: s.keyConcepts, flashcards: s.flashcards, quiz: s.quiz };
-        })();
-
-    const keep = (part, value) => {
-      const content = genBook().content;
-      content[ch.number] = { ...(content[ch.number] || {}), [part]: value, at: new Date().toISOString() };
-      saveGen();
+  async function runPool(items, limit, fn) {
+    let next = 0;
+    const worker = async () => {
+      while (next < items.length) await fn(items[next++]);
     };
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  }
+
+  function assembleNotes(ch, c) {
+    const parts = c.outline.sections.map((_, n) => c.sections[n]);
+    return `# Chapter ${ch.number}: ${ch.title}\n\n${c.outline.intro}\n\n${parts.join("\n\n")}`;
+  }
+
+  async function writeNotes(ch, token) {
+    const c = chapterStore(ch);
+    if (c.markdown) {
+      if (token === showToken) renderNotes(c.markdown);
+      return;
+    }
+    const live = () => token === showToken;
+    const label = `Chapter ${ch.number}`;
+    if (!c.outline) {
+      if (live()) {
+        $("notesBody").innerHTML = waiting(`Gemini is outlining ${esc(label)}…`);
+        $("sectionJump").classList.add("hidden");
+      }
+      c.outline = await gemini({ action: "outline", chapter: ch }, (secs) => {
+        if (live()) $("notesBody").innerHTML = waiting(`Waiting ${secs}s for Gemini's free per-minute limit…`);
+      });
+      c.sections = {};
+      saveGen();
+    }
+    c.sections ||= {};
+    const secs = c.outline.sections;
+    const all = secs.map((x) => ({ number: x.number, title: x.title }));
+
+    // Skeleton: intro, then one block per section (finished, or "writing…").
+    const blockHtml = (n) => c.sections[n]
+      ? renderMarkdown(c.sections[n]).html
+      : waiting(`Writing ${esc([secs[n].number, secs[n].title].filter(Boolean).join(" "))}…`);
+    if (live()) {
+      $("notesBody").innerHTML = `<section class="note-section intro"><p>${inline(c.outline.intro)}</p></section>` +
+        secs.map((_, n) => `<div class="gen-sec" id="gsec-${n}">${blockHtml(n)}</div>`).join("") +
+        `<p class="notes-foot" id="genFoot">Writing the rest of this chapter… sections appear as they're finished.</p>`;
+      $("notesBody").scrollTop = 0;
+      $("sectionJump").classList.remove("hidden");
+      $("sectionJump").innerHTML = `<option value="">Jump to section…</option>` +
+        secs.map((x, n) => `<option value="gsec-${n}">${esc([x.number, x.title].filter(Boolean).join(" "))}</option>`).join("");
+      $("sectionJump").onchange = () => {
+        const target = document.getElementById($("sectionJump").value);
+        if (target) $("notesBody").scrollTo({ top: target.offsetTop - $("notesBody").offsetTop - 8, behavior: "smooth" });
+      };
+    }
+    const block = (n) => (live() ? document.getElementById(`gsec-${n}`) : null);
+
+    let failed = 0;
+    const writeSection = async (n) => {
+      try {
+        const out = await gemini({ action: "section", chapter: ch, section: secs[n], allSections: all }, (wait) => {
+          const el = block(n);
+          if (el) el.innerHTML = waiting(`Waiting ${wait}s for Gemini's free per-minute limit…`);
+        });
+        c.sections[n] = out.markdown;
+        saveGen();
+        const el = block(n);
+        if (el) el.innerHTML = renderMarkdown(out.markdown).html;
+      } catch (err) {
+        failed++;
+        const el = block(n);
+        if (el) {
+          el.innerHTML = `<div class="writing failed"><p><strong>${esc([secs[n].number, secs[n].title].filter(Boolean).join(" "))}</strong>: ${esc(err.message)}</p>
+            <button class="pill-btn" type="button">Retry</button></div>`;
+          el.querySelector("button").onclick = () => {
+            el.innerHTML = blockHtml(n);
+            writeNotes(ch, showToken);
+          };
+        }
+      }
+    };
+    const missing = secs.map((_, n) => n).filter((n) => !c.sections[n]);
+    await runPool(missing, 2, writeSection);
+
+    if (secs.every((_, n) => c.sections[n])) {
+      c.markdown = assembleNotes(ch, c);
+      saveGen();
+      const foot = live() && $("genFoot");
+      if (foot) foot.textContent = entry.source;
+    } else if (live() && $("genFoot")) {
+      $("genFoot").textContent = `${failed} section${failed === 1 ? "" : "s"} couldn't be written. Use Retry on ${failed === 1 ? "it" : "them"}.`;
+    }
+  }
+
+  async function writeStudy(ch, token) {
+    const c = chapterStore(ch);
+    const live = () => token === showToken;
+    if (!c.study) {
+      if (live()) studyLoading(`Writing key concepts, flashcards and quiz for Chapter ${esc(ch.number)}…`);
+      const s = await gemini({ action: "study", chapter: ch }, (secs) => {
+        if (live()) studyLoading(`Waiting ${secs}s for Gemini's free per-minute limit…`);
+      });
+      c.study = { keyConcepts: s.keyConcepts, flashcards: s.flashcards, quiz: s.quiz };
+      saveGen();
+    }
+    if (live()) renderStudy(c.study, ch);
+  }
+
+  async function showGenerated(ch, token, rewrite) {
+    if (rewrite) {
+      genBook().content[ch.number] = {};
+      saveGen();
+    }
     await Promise.all([
-      notesJob.then((md) => { keep("markdown", md); if (token === showToken) renderNotes(md); })
-        .catch((err) => { if (token === showToken) { $("notesBody").innerHTML = errorHtml(err); $("sectionJump").classList.add("hidden"); } }),
-      studyJob.then((s) => { keep("study", s); if (token === showToken) renderStudy(s, ch); })
-        .catch((err) => { if (token === showToken) studyError(err); }),
+      writeNotes(ch, token).catch((err) => {
+        if (token === showToken) {
+          $("notesBody").innerHTML = errorHtml(err) + `<p><button class="pill-btn" id="notesRetry" type="button">Try again</button></p>`;
+          $("sectionJump").classList.add("hidden");
+          $("notesRetry").onclick = () => showChapter(current);
+        }
+      }),
+      writeStudy(ch, token).catch((err) => {
+        if (token === showToken) studyError(err);
+      }),
     ]);
   }
 

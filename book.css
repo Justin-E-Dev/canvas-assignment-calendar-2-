@@ -442,3 +442,9 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .fc-empty { display: none; }
 #flashcards.is-empty .fc-empty { display: block; }
 #flashcards.is-empty .fc-body, #flashcards.is-empty .fc-shuffle { display: none; }
+
+/* Gemini notes being written section by section */
+.gen-sec + .gen-sec { margin-top: 30px; }
+.gen-sec > .note-section.intro:empty { display: none; }
+.writing.failed { flex-direction: column; align-items: flex-start; background: color-mix(in srgb, var(--red) 8%, var(--card)); }
+.writing.failed p { color: var(--text); }

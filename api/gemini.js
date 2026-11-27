@@ -2,8 +2,13 @@
 // Gemini API (free tier). POST /api/gemini with JSON:
 //
 //   { action: "chapters", book }            -> the book's chapter list
-//   { action: "notes",    book, chapter }   -> Markdown notes for one chapter
+//   { action: "outline",  book, chapter }   -> intro paragraph + the chapter's sections
+//   { action: "section",  book, chapter, section, allSections } -> notes for one section
 //   { action: "study",    book, chapter }   -> key concepts, flashcards, quiz
+//   { action: "notes",    book, chapter }   -> (older) a whole chapter at once
+//
+// A whole chapter is too long to write within Vercel's 60-second limit, so the
+// page asks for an outline first and then writes each section separately.
 //
 // The key lives only in Vercel's environment settings (GEMINI_API_KEY), never in
 // this code or the browser. Get a free key at https://aistudio.google.com/apikey.
@@ -35,6 +40,11 @@ const SCHEMAS = {
     chapters: S("ARRAY", { items: obj({ number: S("STRING"), title: S("STRING") }) }),
   }),
   notes: obj({ markdown: S("STRING") }),
+  outline: obj({
+    intro: S("STRING"),
+    sections: S("ARRAY", { items: obj({ number: S("STRING"), title: S("STRING"), focus: S("STRING") }) }),
+  }),
+  section: obj({ markdown: S("STRING") }),
   study: obj({
     keyConcepts: S("ARRAY", { items: obj({ title: S("STRING"), text: S("STRING") }) }),
     flashcards: S("ARRAY", { items: obj({ front: S("STRING"), back: S("STRING") }) }),
@@ -77,8 +87,30 @@ const describe = (b) => [
   b.course && `The student's course: ${b.course}`,
 ].filter(Boolean).join("\n");
 
-function prompts(action, book, chapter) {
+function prompts(action, book, chapter, section, allSections) {
   const ch = chapter && `Chapter ${chapter.number}${chapter.title ? `: ${chapter.title}` : ""}`;
+  if (action === "outline") {
+    return `${describe(book)}
+
+Outline ${ch}.
+"intro": one paragraph (3-5 sentences) on what the chapter covers and why it matters.
+"sections": the chapter's main sections in order (usually 5-9). "number" like "${chapter.number}.1", "title" the section title, "focus" one sentence listing the topics that section covers.
+Use the book's real section titles if you know them.`;
+  }
+  if (action === "section") {
+    return `${describe(book)}
+
+You're writing study notes for ${ch}, one section at a time. The chapter's sections are:
+${allSections.map((x) => `- ${x.number} ${x.title}`).join("\n")}
+
+Write the notes for section ${section.number} ${section.title} only${section.focus ? ` (it covers: ${section.focus})` : ""}.
+About 400-700 words, explaining everything a student needs to understand this section, with examples, formulas or step-by-step processes where the topic has them.
+Return them in "markdown" using ONLY this format:
+- First line exactly: "## ${section.number} ${section.title}"
+- Then paragraphs, bullet lists ("- "), numbered lists ("1. "), one level of nested bullets (indent 2 spaces), **bold** for key terms, \`code\` for formulas. "### " for sub-headings.
+- No "# " heading, no other "## " headings, no tables, images, links or HTML. Blank line between paragraphs.
+- Don't repeat material that belongs to the other sections.`;
+  }
   if (action === "chapters") {
     return `${describe(book)}
 
@@ -122,7 +154,7 @@ class GeminiError extends Error {
 const thinkingFor = (model) => (/2\.5/.test(model) ? { thinkingBudget: 0 } : { thinkingLevel: "low" });
 
 async function callModel(model, action, text, deadline, opts = {}) {
-  const perModel = action === "chapters" ? 25000 : 50000; // one slow model can't use up all the time
+  const perModel = action === "chapters" || action === "outline" ? 25000 : 50000; // one slow model can't use up all the time
   const timeLeft = Math.min(perModel, deadline - Date.now());
   if (timeLeft < 3000) throw new GeminiError(504, "Ran out of time", "timeout");
   const generationConfig = {
@@ -297,7 +329,7 @@ module.exports = async function handler(req, res) {
 
   const body = req.body || {};
   const action = body.action;
-  if (!["chapters", "notes", "study"].includes(action)) return res.status(400).json({ error: "Unknown action." });
+  if (!["chapters", "outline", "section", "notes", "study"].includes(action)) return res.status(400).json({ error: "Unknown action." });
   const book = readBook(body.book);
   if (!book) return res.status(400).json({ error: "Missing book details." });
   let chapter = null;
@@ -305,11 +337,39 @@ module.exports = async function handler(req, res) {
     chapter = { number: clip(body.chapter && body.chapter.number, 20), title: clip(body.chapter && body.chapter.title, 200) };
     if (!chapter.number && !chapter.title) return res.status(400).json({ error: "Missing chapter." });
   }
+  let section = null;
+  let allSections = [];
+  if (action === "section") {
+    const sec = body.section || {};
+    section = { number: clip(sec.number, 20), title: clip(sec.title, 200), focus: clip(sec.focus, 400) };
+    if (!section.title) return res.status(400).json({ error: "Missing section." });
+    allSections = (Array.isArray(body.allSections) ? body.allSections : []).slice(0, 20)
+      .map((x) => ({ number: clip(x && x.number, 20), title: clip(x && x.title, 200) })).filter((x) => x.title);
+    if (!allSections.length) allSections = [section];
+  }
 
   try {
-    const { result, model } = await ask(action, prompts(action, book, chapter));
+    const { result, model } = await ask(action, prompts(action, book, chapter, section, allSections));
     let out = result;
     if (action === "study") out = cleanStudy(result);
+    if (action === "section") {
+      let md = String(result.markdown || "").trim().replace(/^#\s.*\n+/, "");
+      const heading = `## ${[section.number, section.title].filter(Boolean).join(" ")}`;
+      if (!/^##\s/.test(md)) md = `${heading}\n\n${md}`;
+      // Only one section heading: demote any extra "## " headings to sub-headings.
+      const lines = md.split("\n");
+      md = [lines[0], ...lines.slice(1).map((l) => l.replace(/^##\s/, "### "))].join("\n");
+      if (md.length < 80) return res.status(502).json({ error: "Gemini's notes for this section came back empty. Try again." });
+      out = { markdown: md };
+    }
+    if (action === "outline") {
+      out = {
+        intro: clip(result.intro, 2000),
+        sections: (result.sections || []).map((x) => ({ number: clip(x.number, 20), title: clip(x.title, 200), focus: clip(x.focus, 400) }))
+          .filter((x) => x.title).slice(0, 14),
+      };
+      if (!out.sections.length) return res.status(502).json({ error: "Gemini couldn't outline this chapter. Try again." });
+    }
     if (action === "notes" && !/^##\s/m.test(String(result.markdown || ""))) {
       return res.status(502).json({ error: "Gemini's notes came back in the wrong format. Try again." });
     }
@@ -330,7 +390,10 @@ module.exports = async function handler(req, res) {
         return res.status(503).json({ error: "Gemini is busy right now. Please try again in a minute." });
       }
       if (err.kind === "quota") {
-        return res.status(429).json({ error: "Gemini's free limit is used up for now. Wait a minute (or until tomorrow if it's the daily limit) and try again." });
+        const wait = Number((String(err.message).match(/retry in ([\d.]+)s/i) || [])[1]);
+        const daily = /per.?day|daily/i.test(err.message);
+        return res.status(429).json({
+          retryAfter: daily ? null : Math.min(60, Math.ceil(wait || 20)), error: "Gemini's free limit is used up for now. Wait a minute (or until tomorrow if it's the daily limit) and try again." });
       }
       if (err.kind === "key") {
         return res.status(503).json({ error: "The Gemini key in Vercel isn't working. Check GEMINI_API_KEY in the project's settings.", setup: true });
