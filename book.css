@@ -564,3 +564,10 @@ mark.hit.current { background: #f6c453; box-shadow: 0 0 0 2px #f6c453; }
 }
 :root[data-theme="dark"] mark.hit { background: rgba(246, 196, 83, 0.3); }
 :root[data-theme="dark"] mark.hit.current { background: rgba(246, 196, 83, 0.6); box-shadow: 0 0 0 2px rgba(246, 196, 83, 0.6); }
+
+/* Efficient Learning logo */
+.side-logo { justify-content: flex-start; padding: 0 22px; gap: 10px; }
+.logo-mark, .side-logo .logo-mark, .brand .logo-mark { stroke: none; width: 36px; height: 36px; flex: none; display: block; border-radius: 11px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2); }
+.logo-text { display: flex; flex-direction: column; line-height: 1.1; text-align: left; }
+.logo-text strong { font-size: 1.02rem; font-weight: 700; }
+.logo-text span { font-size: 0.8rem; font-weight: 500; opacity: 0.75; letter-spacing: 0.04em; }

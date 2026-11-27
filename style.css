@@ -490,3 +490,10 @@ select option { color: #1d1d1f; }
   .side-nav a span { font-size: 0.85rem; }
   .stat-value { font-size: 1.45rem; }
 }
+
+/* Efficient Learning logo */
+a.brand { color: inherit; text-decoration: none; }
+.logo-mark, .side-logo .logo-mark, .brand .logo-mark { stroke: none; width: 36px; height: 36px; flex: none; display: block; border-radius: 11px; box-shadow: 0 4px 14px rgba(45, 59, 142, 0.25); }
+.logo-text { display: flex; flex-direction: column; line-height: 1.1; }
+.logo-text strong { font-size: 1.02rem; font-weight: 700; letter-spacing: -0.01em; }
+.logo-text span { font-size: 0.8rem; font-weight: 500; color: var(--muted); letter-spacing: 0.04em; }
