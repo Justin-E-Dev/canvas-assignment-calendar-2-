@@ -70,7 +70,7 @@ put('miles', 'miles', 'totalmiles', 'mileage', 'distance', 'tripmiles', 'milesdr
 const norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 function match(n) {
-  if (!n || n.length > 40) return null;
+  if (!n || n.length > 60) return null;
   if (EXACT[n]) return EXACT[n];
   const odo = n.includes('odometer') || n.includes('odo') || n.includes('reading');
   if (odo && (n.includes('start') || n.includes('begin'))) return 'odoStart';
@@ -78,8 +78,10 @@ function match(n) {
   if (n.includes('date')) return 'date';
   if (n.includes('initial')) return 'initials';
   if (n.includes('program')) return 'program';
-  if (n.includes('destination') || n.startsWith('client') || (n.startsWith('to') && (n.includes('location') || n.includes('address')))) return 'end';
-  if (n.includes('origin') || n.startsWith('from') || (n.startsWith('start') && (n.includes('location') || n.includes('address') || n.includes('point')))) return 'start';
+  const place = n.includes('location') || n.includes('address') || n.includes('point') || n.includes('place');
+  if (n.includes('destination') || n.startsWith('client') || ((n.startsWith('to') || n.startsWith('end') || n.startsWith('finish')
+    || n.startsWith('arriv')) && place)) return 'end';
+  if (n.includes('origin') || n.startsWith('from') || ((n.startsWith('start') || n.startsWith('begin') || n.startsWith('depart')) && place)) return 'start';
   if (n.includes('miles') || n.includes('distance')) return 'miles';
   return null;
 }
@@ -116,41 +118,93 @@ async function openWorkbook(buf) {
   return wb;
 }
 
-function capacity(ws, headerRow) {
-  const last = Math.min(ws.rowCount, headerRow + 500);
-  for (let r = headerRow + 1; r <= last; r++) {
+/** True for the hidden cells of a merged block (they mirror the top-left cell's value). */
+const isMergedCopy = (cell) => cell.isMerged && cell.master && cell.master.address !== cell.address;
+
+/** Last row covered by a (possibly merged) cell. */
+function bottomOf(ws, row, col) {
+  const master = ws.getCell(row, col).master || ws.getCell(row, col);
+  let r = row;
+  while (r < row + 20) {
+    const below = ws.getCell(r + 1, col);
+    if (below.isMerged && below.master && below.master.address === master.address) r += 1; else break;
+  }
+  return r;
+}
+
+const hasValue = (cell) => {
+  if (isFormula(cell)) return false; // a form's own formulas (e.g. Miles = End - Start) belong to data rows
+  const v = cell.value;
+  return !(v === null || v === undefined || (typeof v === 'string' && !v.trim()));
+};
+
+/** Rows available between the first data row and a "Total" row, if the form has one. */
+function capacity(ws, dataStart) {
+  const last = Math.min(ws.rowCount, dataStart + 500);
+  for (let r = dataStart; r <= last; r++) {
     let found = false;
     ws.getRow(r).eachCell((c) => {
+      if (isMergedCopy(c)) return;
       const t = cellText(c);
       if ((t && norm(t).startsWith('total')) || (isFormula(c) && /SUM\(/i.test(c.value.formula || ''))) found = true;
     });
-    if (found) return r - headerRow - 1 > 0 ? r - headerRow - 1 : null;
+    if (found) return r - dataStart > 0 ? r - dataStart : null;
   }
   return null;
+}
+
+/**
+ * Column headings can span several stacked rows ("Odometer" / "Start") or merged cells, and forms often put
+ * hints or a sample line under them. Each candidate block of 1-3 rows is read as one heading per column;
+ * the best-scoring block wins and trips start on the first empty row after it.
+ */
+function headingsAt(ws, top, height) {
+  const texts = new Map();
+  for (let r = top; r < top + height; r++) {
+    ws.getRow(r).eachCell((c, col) => {
+      if (isMergedCopy(c)) return;
+      const t = cellText(c);
+      if (t === null || !t.trim()) return;
+      texts.set(col, (texts.get(col) ? texts.get(col) + ' ' : '') + t);
+    });
+  }
+  const cols = {};
+  const bareStart = [];
+  const bareEnd = [];
+  [...texts.keys()].sort((a, b) => a - b).forEach((col) => {
+    const n = norm(texts.get(col));
+    if (['start', 'begin', 'beginning', 'starting'].includes(n)) bareStart.push(col);
+    else if (['end', 'ending', 'finish'].includes(n)) bareEnd.push(col);
+    else { const f = match(n); if (f && !(f in cols)) cols[f] = col; }
+  });
+  bareStart.forEach((col) => { const f = 'odoStart' in cols ? 'start' : 'odoStart'; if (!(f in cols)) cols[f] = col; });
+  bareEnd.forEach((col) => { const f = 'odoEnd' in cols ? 'end' : 'odoEnd'; if (!(f in cols)) cols[f] = col; });
+  return cols;
 }
 
 function analyze(wb) {
   let best = null;
   let bestScore = 1;
+  let bestHeight = 0;
   wb.worksheets.slice(0, 10).forEach((ws, sheetIndex) => {
     for (let r = 1; r <= Math.min(ws.rowCount, 80); r++) {
-      const cols = {};
-      const bareStart = [];
-      const bareEnd = [];
-      ws.getRow(r).eachCell((c, col) => {
-        const t = cellText(c);
-        if (t === null) return;
-        const n = norm(t);
-        if (['start', 'begin', 'beginning', 'starting'].includes(n)) bareStart.push(col);
-        else if (['end', 'ending', 'finish'].includes(n)) bareEnd.push(col);
-        else { const f = match(n); if (f && !(f in cols)) cols[f] = col; }
-      });
-      bareStart.forEach((col) => { const f = 'odoStart' in cols ? 'start' : 'odoStart'; if (!(f in cols)) cols[f] = col; });
-      bareEnd.forEach((col) => { const f = 'odoEnd' in cols ? 'end' : 'odoEnd'; if (!(f in cols)) cols[f] = col; });
-      const score = Object.keys(cols).length;
-      if (score > bestScore) {
+      for (let h = 1; h <= 3; h++) {
+        const cols = headingsAt(ws, r, h);
+        const score = Object.keys(cols).length;
+        // Most columns recognised wins; on a tie, the tightest block (fewest rows) wins.
+        if (score < bestScore || (score === bestScore && (!best || h >= bestHeight))) continue;
+        // Trips start below the heading block (and below any merged heading cells)...
+        let dataStart = r + h;
+        for (const col of Object.values(cols)) dataStart = Math.max(dataStart, bottomOf(ws, r, col) + 1);
+        // ...skipping up to 3 hint/sample rows that already hold values in the matched columns.
+        for (let skip = 0; skip < 3; skip++) {
+          const row = ws.getRow(dataStart);
+          if (!Object.values(cols).some((col) => hasValue(row.getCell(col)) || isMergedCopy(row.getCell(col)))) break;
+          dataStart += 1;
+        }
         bestScore = score;
-        best = { sheet: ws, sheetIndex, headerRow: r, cols, capacity: capacity(ws, r) };
+        bestHeight = h;
+        best = { sheet: ws, sheetIndex, headerRow: r, dataStart, cols, capacity: capacity(ws, dataStart) };
       }
     }
   });
@@ -168,6 +222,7 @@ function describe(fileName, layout) {
     columns: order.filter((f) => f in layout.cols).map((f) => FIELDS[f]),
     capacity: layout.capacity,
     headerRow: layout.headerRow,
+    firstDataRow: layout.dataStart,
   };
 }
 
@@ -189,7 +244,7 @@ function sheetName(wb, base, n) {
 
 function writeRow(ws, layout, rowNumber, e) {
   const row = ws.getRow(rowNumber);
-  const model = ws.getRow(layout.headerRow + 1);
+  const model = ws.getRow(layout.dataStart);
   for (const [field, col] of Object.entries(layout.cols)) {
     const cell = row.getCell(col);
     if (isFormula(cell)) continue; // keep the form's own calculations
@@ -275,7 +330,7 @@ async function fill(templateBuf, entries, ctx) {
   for (let p = 2; p <= pages; p++) sheets.push(cloneSheet(wb, layout.sheet, sheetName(wb, layout.sheet.name, p)));
   for (let p = 0; p < pages; p++) {
     const chunk = entries.slice(p * cap, (p + 1) * cap);
-    chunk.forEach((e, i) => writeRow(sheets[p], layout, layout.headerRow + 1 + i, e));
+    chunk.forEach((e, i) => writeRow(sheets[p], layout, layout.dataStart + i, e));
     fillLabels(sheets[p], layout, chunk, ctx, p + 1, pages);
   }
   wb.calcProperties = { ...(wb.calcProperties || {}), fullCalcOnLoad: true };

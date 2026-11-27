@@ -116,3 +116,64 @@ test('template upload rejects non-Excel files and zip bombs', async () => {
   assert.ok(bomb.length < 1024 * 1024);
   await assert.rejects(sheets.openWorkbook(bomb), /too large/);
 });
+
+/** Re-creation of a real agency form ("Staff Travel") with headings over several rows and a hint/sample row. */
+async function staffTravel({ merged }) {
+  const wb = new ExcelJS.Workbook();
+  const s = wb.addWorksheet('Sheet1');
+  s.getCell('A1').value = 'Staff Travel';
+  s.mergeCells('A1:H1');
+  const reason = 'Reason for travel\nPlease be specific. Example "transporting client to court, picking intake up, traveling to client home for session, etc."';
+  if (merged) {
+    const heads = { A: 'Travel\nDate', B: 'Start\nLocation', C: 'Finish\nLocation', D: reason, F: 'Odometer\nStart', G: 'Odometer\nFinish', H: 'Miles' };
+    for (const [col, text] of Object.entries(heads)) {
+      s.getCell(col + '2').value = text;
+      s.mergeCells(`${col}2:${col}${['F', 'G', 'A'].includes(col) ? 3 : 4}`);
+    }
+    s.getCell('A4').value = { formula: 'TODAY()' };
+  } else {
+    ['Travel', 'Start', 'Finish', 'Reason for travel', 'Program', 'Odometer', 'Odometer', 'Miles'].forEach((t, i) => { s.getRow(2).getCell(i + 1).value = t; });
+    ['Date', 'Location', 'Location', 'Please be specific. Example "transporting client to court,'].forEach((t, i) => { s.getRow(3).getCell(i + 1).value = t; });
+    s.getCell('F3').value = 'Start';
+    s.getCell('G3').value = 'Finish';
+    s.getCell('A4').value = { formula: 'TODAY()' };
+    s.getCell('D4').value = 'picking intake up, traveling to client home for session, etc."';
+  }
+  s.getCell('E2').value = 'Program';
+  s.getCell('E3').value = 'Voy, PTR';
+  s.getCell('E4').value = 'MDFT, OP, SAP';
+  s.getCell('F4').value = 36;
+  s.getCell('G4').value = 67;
+  for (let r = 5; r <= 16; r++) s.getCell('H' + r).value = { formula: `IF(G${r}="","",G${r}-F${r})` };
+  s.getCell('G17').value = 'Total Miles';
+  s.getCell('H17').value = { formula: 'SUM(H5:H16)' };
+  return Buffer.from(await wb.xlsx.writeBuffer());
+}
+
+for (const merged of [false, true]) {
+  test(`Staff Travel form (${merged ? 'merged headings' : 'stacked heading rows'}) is filled below its hints`, async () => {
+    const tpl = await staffTravel({ merged });
+    const layout = sheets.analyze(await sheets.openWorkbook(tpl));
+    assert.deepEqual(layout.cols, { date: 1, start: 2, end: 3, program: 5, odoStart: 6, odoEnd: 7, miles: 8 });
+    assert.equal(layout.dataStart, 5);
+    assert.equal(layout.capacity, 12);
+
+    const rows = [trip(1, '2026-11-02', 'MDFT', 'Court House', 12.5), trip(2, '2026-11-03', 'Voy', 'Client Home', 7)];
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(await sheets.fill(tpl, rows, { firstName: 'Justin', sheetNumber: 1, sheetCount: 1 }));
+    const s = wb.worksheets[0];
+    assert.equal(s.getCell('E3').value, 'Voy, PTR');        // hints untouched
+    assert.equal(s.getCell('E4').value, 'MDFT, OP, SAP');
+    assert.equal(s.getCell('F4').value, 36);                // sample row untouched
+    assert.equal(s.getCell('A5').value.toISOString().slice(0, 10), '2026-11-02');
+    assert.equal(s.getCell('B5').value, 'Office');
+    assert.equal(s.getCell('C5').value, 'Court House');
+    assert.equal(s.getCell('E5').value, 'MDFT');
+    assert.equal(s.getCell('F5').value, 1000);
+    assert.equal(s.getCell('G5').value, 1012.5);
+    assert.ok(s.getCell('H5').value.formula, "form's miles formula kept");
+    assert.equal(s.getCell('C6').value, 'Client Home');
+    assert.ok(!s.getCell('C7').value);
+    assert.equal(s.getCell('H17').value.formula, 'SUM(H5:H16)');
+  });
+}
