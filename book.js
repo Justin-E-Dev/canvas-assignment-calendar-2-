@@ -809,7 +809,7 @@
     $("sectionJump").classList.add("hidden");
     $("notesBody").innerHTML = `<div class="generate-box">
         <p><strong>Chapter ${esc(ch.number)}: ${esc(ch.title)}</strong></p>
-        <p class="muted">No notes for this chapter yet. Gemini can write detailed notes, key concepts, flashcards and a quiz for it in one go (usually 30–90 seconds, free).</p>
+        <p class="muted">No notes for this chapter yet. Gemini can write detailed notes covering every concept in the chapter, plus key concepts, flashcards and a quiz, in one go (usually 1–2 minutes, free).</p>
         <button class="pill-btn gen-btn" id="genBtn" type="button">Generate this chapter</button>
       </div>`;
     const hint = waitingMsg("Press “Generate this chapter” in the Notes panel.");

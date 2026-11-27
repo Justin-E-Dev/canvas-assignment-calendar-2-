@@ -99,16 +99,22 @@ All 4 options must be different and plausible.`;
     case "chapter":
       return `${head}
 
-Write study notes for ${ch}. A student will use them instead of rereading the chapter, so they must be specific and explain things, not just name topics. Output exactly these parts, in this order, and nothing else:
+Write study notes for ${ch}. A student will use them instead of rereading the chapter, so they must be COMPLETE: cover every new concept the chapter introduces, and explain each one, not just name it.
+
+Before writing, work through the chapter in order, section by section and subsection by subsection, and make sure nothing is left out: every new term, concept, definition, model, theory, law, formula/equation, process or cycle, classification, named example or experiment, and comparison the chapter introduces must appear in the notes. If the chapter introduces it, the notes explain it. Don't stop early or summarize to save space.
+
+Output exactly these parts, in this order, and nothing else:
 
 INTRO: one paragraph (3-4 sentences, on a single line) about what the chapter covers and why it matters.
 
-Then the notes: one "## " heading per main section of the chapter, starting with the section number (e.g. "## ${chapter.number}.1 Section title"; use the book's real section titles if you know them, usually 5-8 sections). For each section:
+Then the notes: one "## " heading per main section of the chapter, in the book's order, starting with the section number (e.g. "## ${chapter.number}.1 Section title"; use the book's real section titles if you know them). Include EVERY section of the chapter. For each section:
 - Start with 1-2 sentences saying what the section is about.
 - Then "- " bullets for every important idea. Each bullet: the **key term or idea in bold**, followed by 1-3 sentences explaining what it means, how it works and why it matters. Never write a bullet that only names a topic.
 - Include concrete examples, definitions, formulas (in \`code\`), numbers, and step-by-step processes (as "1. " numbered lists) wherever the topic has them.
-- Use "### " sub-headings to break up longer sections, and one level of nested "  - " bullets for details.
-About 1,800-2,500 words of notes in total.
+- Use "### " sub-headings for the section's subsections (cover every subsection), and one level of nested "  - " bullets for details.
+- Give every new term its own explained bullet.
+After the last section, add "## Key terms" with one "- **Term:** one-line definition" bullet for EVERY new term in the chapter. Every term in this list must also be explained in the sections above.
+Write at least 2,500 words of notes, and longer if the chapter needs it to cover everything.
 
 ===CONCEPTS===
 10-12 lines, most important first:
