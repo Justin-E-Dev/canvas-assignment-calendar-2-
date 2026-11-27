@@ -5,8 +5,8 @@
    ========================================================================== */
 
 :root {
-  --bg: #bcd3f7;
-  --bg-2: #d7e5fb;
+  --bg: #e4ecf9;
+  --bg-2: #eef3fb;
   --text: #1d1d1f;
   --muted: #3f4659;
   --faint: #5f6678;
@@ -14,8 +14,8 @@
   --ink: #1d1d1f; /* primary buttons */
   --ink-text: #ffffff;
 
-  --glass: rgba(255, 255, 255, 0.24);
-  --glass-strong: rgba(255, 255, 255, 0.48);
+  --glass: rgba(255, 255, 255, 0.42);
+  --glass-strong: rgba(255, 255, 255, 0.62);
   --glass-hover: rgba(255, 255, 255, 0.68);
   --glass-edge: rgba(255, 255, 255, 0.6);
   --hairline: rgba(29, 29, 31, 0.08);
@@ -23,10 +23,10 @@
   --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.9);
   --blur: blur(22px) saturate(180%);
 
-  --blob-1: rgba(45, 115, 255, 0.7);
-  --blob-2: rgba(90, 185, 255, 0.72);
-  --blob-3: rgba(30, 75, 210, 0.55);
-  --blob-4: rgba(110, 215, 255, 0.65);
+  --blob-1: rgba(96, 150, 245, 0.32);
+  --blob-2: rgba(130, 195, 250, 0.32);
+  --blob-3: rgba(80, 120, 225, 0.22);
+  --blob-4: rgba(150, 215, 250, 0.28);
 
   --radius: 20px;
   --radius-sm: 14px;
@@ -35,47 +35,47 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #070d1f;
-    --bg-2: #0b1430;
+    --bg: #0b1020;
+    --bg-2: #0e1528;
     --text: #f2f2f5;
     --muted: #a1a1aa;
     --faint: #75757e;
     --accent: #8ea2ff;
     --ink: #f2f2f5;
     --ink-text: #111216;
-    --glass: rgba(20, 28, 52, 0.32);
-    --glass-strong: rgba(30, 40, 70, 0.5);
+    --glass: rgba(22, 28, 48, 0.5);
+    --glass-strong: rgba(32, 40, 64, 0.66);
     --glass-hover: rgba(40, 52, 88, 0.68);
     --glass-edge: rgba(255, 255, 255, 0.12);
     --hairline: rgba(255, 255, 255, 0.08);
     --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
     --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.06);
-    --blob-1: rgba(37, 99, 235, 0.75);
-    --blob-2: rgba(14, 165, 233, 0.55);
-    --blob-3: rgba(30, 64, 175, 0.7);
-    --blob-4: rgba(56, 189, 248, 0.45);
+    --blob-1: rgba(37, 99, 235, 0.32);
+    --blob-2: rgba(14, 165, 233, 0.2);
+    --blob-3: rgba(30, 64, 175, 0.3);
+    --blob-4: rgba(56, 189, 248, 0.16);
   }
 }
 :root[data-theme="dark"] {
-  --bg: #070d1f;
-  --bg-2: #0b1430;
+  --bg: #0b1020;
+  --bg-2: #0e1528;
   --text: #f2f2f5;
   --muted: #a1a1aa;
   --faint: #75757e;
   --accent: #8ea2ff;
   --ink: #f2f2f5;
   --ink-text: #111216;
-  --glass: rgba(20, 28, 52, 0.32);
-  --glass-strong: rgba(30, 40, 70, 0.5);
+  --glass: rgba(22, 28, 48, 0.5);
+  --glass-strong: rgba(32, 40, 64, 0.66);
   --glass-hover: rgba(40, 52, 88, 0.68);
   --glass-edge: rgba(255, 255, 255, 0.12);
   --hairline: rgba(255, 255, 255, 0.08);
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  --blob-1: rgba(37, 99, 235, 0.75);
-  --blob-2: rgba(14, 165, 233, 0.55);
-  --blob-3: rgba(30, 64, 175, 0.7);
-    --blob-4: rgba(56, 189, 248, 0.45);
+  --blob-1: rgba(37, 99, 235, 0.32);
+  --blob-2: rgba(14, 165, 233, 0.2);
+  --blob-3: rgba(30, 64, 175, 0.3);
+    --blob-4: rgba(56, 189, 248, 0.16);
 }
 
 * { box-sizing: border-box; }
@@ -96,15 +96,15 @@ h1, h2, h3, h4 { letter-spacing: -0.015em; }
 
 /* Moving blue blur behind the glass: four soft shapes drifting slowly */
 .backdrop { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
-.backdrop span { position: absolute; border-radius: 50%; filter: blur(60px); will-change: transform; }
-.backdrop span:nth-child(1) { width: 55vmax; height: 55vmax; left: -15vmax; top: -20vmax; background: var(--blob-1); animation: drift-a 26s ease-in-out infinite alternate; }
-.backdrop span:nth-child(2) { width: 45vmax; height: 45vmax; right: -12vmax; top: 10vh; background: var(--blob-2); animation: drift-b 32s ease-in-out infinite alternate; }
-.backdrop span:nth-child(3) { width: 50vmax; height: 50vmax; left: 20vw; bottom: -25vmax; background: var(--blob-3); animation: drift-c 38s ease-in-out infinite alternate; }
-.backdrop span:nth-child(4) { width: 30vmax; height: 30vmax; left: 45vw; top: 25vh; background: var(--blob-4); animation: drift-d 22s ease-in-out infinite alternate; }
-@keyframes drift-a { from { transform: translate(0, 0) scale(1); } to { transform: translate(28vw, 18vh) scale(1.15); } }
-@keyframes drift-b { from { transform: translate(0, 0) scale(1.05); } to { transform: translate(-30vw, 22vh) scale(0.9); } }
-@keyframes drift-c { from { transform: translate(0, 0) scale(1); } to { transform: translate(-18vw, -30vh) scale(1.2); } }
-@keyframes drift-d { from { transform: translate(0, 0) scale(0.9); } to { transform: translate(-35vw, 30vh) scale(1.1); } }
+.backdrop span { position: absolute; border-radius: 50%; filter: blur(80px); will-change: transform; }
+.backdrop span:nth-child(1) { width: 55vmax; height: 55vmax; left: -15vmax; top: -20vmax; background: var(--blob-1); animation: drift-a 48s ease-in-out infinite alternate; }
+.backdrop span:nth-child(2) { width: 45vmax; height: 45vmax; right: -12vmax; top: 10vh; background: var(--blob-2); animation: drift-b 56s ease-in-out infinite alternate; }
+.backdrop span:nth-child(3) { width: 50vmax; height: 50vmax; left: 20vw; bottom: -25vmax; background: var(--blob-3); animation: drift-c 62s ease-in-out infinite alternate; }
+.backdrop span:nth-child(4) { width: 30vmax; height: 30vmax; left: 45vw; top: 25vh; background: var(--blob-4); animation: drift-d 44s ease-in-out infinite alternate; }
+@keyframes drift-a { from { transform: translate(0, 0) scale(1); } to { transform: translate(10vw, 6vh) scale(1.05); } }
+@keyframes drift-b { from { transform: translate(0, 0) scale(1); } to { transform: translate(-10vw, 8vh) scale(0.96); } }
+@keyframes drift-c { from { transform: translate(0, 0) scale(1); } to { transform: translate(-6vw, -10vh) scale(1.06); } }
+@keyframes drift-d { from { transform: translate(0, 0) scale(1); } to { transform: translate(-12vw, 10vh) scale(1.04); } }
 @media (prefers-reduced-motion: reduce) { .backdrop span { animation: none; } }
 
 /* The glass material */
