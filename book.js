@@ -358,7 +358,7 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...payload, book: { ...book, course } }),
-        signal: AbortSignal.timeout(75000),
+        signal: AbortSignal.timeout(305000), // the server gives up at 5 minutes
       });
     } catch (e) {
       throw new Error(e && e.name === "TimeoutError"

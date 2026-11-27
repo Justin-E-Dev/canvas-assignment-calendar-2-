@@ -154,7 +154,8 @@ class GeminiError extends Error {
 const thinkingFor = (model) => (/2\.5/.test(model) ? { thinkingBudget: 0 } : { thinkingLevel: "low" });
 
 async function callModel(model, action, text, deadline, opts = {}) {
-  const perModel = action === "chapters" || action === "outline" ? 25000 : 50000; // one slow model can't use up all the time
+  // One slow model can't use up all the time: short jobs get 1 minute, writing gets 4.
+  const perModel = action === "chapters" || action === "outline" ? 60000 : 240000;
   const timeLeft = Math.min(perModel, deadline - Date.now());
   if (timeLeft < 3000) throw new GeminiError(504, "Ran out of time", "timeout");
   const generationConfig = {
@@ -238,7 +239,7 @@ async function modelOrder() {
 }
 
 async function ask(action, text) {
-  const deadline = Date.now() + 55000; // Vercel stops the function at 60 s
+  const deadline = Date.now() + 285000; // Vercel stops the function at 300 s (5 minutes)
   const base = workingModel ? [workingModel] : [];
   const order = [...new Set([...base, ...(await modelOrder())])];
   let last;
@@ -252,7 +253,7 @@ async function ask(action, text) {
       if (!(err instanceof GeminiError)) throw err;
       // Unavailable, too slow or overloaded: try the next model if there's time.
       if (!["model", "timeout", "busy"].includes(err.kind)) throw err;
-      if (deadline - Date.now() < 8000) break;
+      if (deadline - Date.now() < 15000) break;
     }
   }
   throw last || new GeminiError(502, "No Gemini model available", "other");
@@ -409,5 +410,5 @@ module.exports = async function handler(req, res) {
   }
 };
 
-// Writing a chapter can take a while.
-module.exports.config = { maxDuration: 60 };
+// Writing can take a while: allow up to 5 minutes (the most Vercel's free plan allows).
+module.exports.config = { maxDuration: 300 };
