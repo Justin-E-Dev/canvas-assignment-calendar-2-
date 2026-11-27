@@ -327,7 +327,13 @@
     $("chapterSelect").value = String(i);
   }
 
-  const waiting = (text) => `<div class="writing"><span class="spinner" aria-hidden="true"></span><p>${text}</p></div>`;
+  const waiting = (text) => `<div class="writing"><span class="spinner" aria-hidden="true"></span><p>${text} <span class="elapsed" data-start="${Date.now()}"></span></p></div>`;
+  setInterval(() => {
+    document.querySelectorAll(".elapsed").forEach((el) => {
+      const secs = Math.round((Date.now() - Number(el.dataset.start)) / 1000);
+      el.textContent = secs >= 3 ? `(${secs}s)` : "";
+    });
+  }, 1000);
 
   // ---------- Asking Gemini (through this website's own server function) ----------
   async function gemini(payload) {
@@ -337,9 +343,12 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...payload, book: { ...book, course } }),
+        signal: AbortSignal.timeout(75000),
       });
-    } catch {
-      throw new Error("Couldn't reach the website. Check your internet connection.");
+    } catch (e) {
+      throw new Error(e && e.name === "TimeoutError"
+        ? "Gemini took too long to answer. Please try again."
+        : "Couldn't reach the website. Check your internet connection.");
     }
     let data = null;
     try {
@@ -506,7 +515,7 @@
   async function openLibraryChapters() {
     if (!book.isbn) return [];
     try {
-      const res = await fetch(`https://openlibrary.org/isbn/${encodeURIComponent(book.isbn)}.json`);
+      const res = await fetch(`https://openlibrary.org/isbn/${encodeURIComponent(book.isbn)}.json`, { signal: AbortSignal.timeout(6000) });
       if (!res.ok) return [];
       const toc = (await res.json()).table_of_contents || [];
       const top = toc.filter((t) => t.title && !(t.level > 0));

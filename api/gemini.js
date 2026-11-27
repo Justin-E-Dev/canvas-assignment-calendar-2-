@@ -117,8 +117,13 @@ class GeminiError extends Error {
   }
 }
 
-async function callModel(model, action, text) {
-  const res = await fetch(`${API}/${encodeURIComponent(model)}:generateContent`, {
+async function callModel(model, action, text, deadline) {
+  const timeLeft = deadline - Date.now();
+  if (timeLeft < 3000) throw new GeminiError(504, "Ran out of time", "timeout");
+  let res;
+  try {
+    res = await fetch(`${API}/${encodeURIComponent(model)}:generateContent`, {
+    signal: AbortSignal.timeout(timeLeft),
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
     body: JSON.stringify({
@@ -132,6 +137,10 @@ async function callModel(model, action, text) {
       },
     }),
   });
+  } catch (e) {
+    if (e && (e.name === "TimeoutError" || e.name === "AbortError")) throw new GeminiError(504, "Gemini took too long", "timeout");
+    throw new GeminiError(502, `Couldn't reach Gemini: ${e && e.message}`, "other");
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = (data.error && data.error.message) || `HTTP ${res.status}`;
@@ -155,11 +164,12 @@ async function callModel(model, action, text) {
 }
 
 async function ask(action, text) {
+  const deadline = Date.now() + 55000; // Vercel stops the function at 60 s
   const order = workingModel ? [workingModel, ...MODELS.filter((m) => m !== workingModel)] : MODELS;
   let last;
   for (const model of order) {
     try {
-      const result = await callModel(model, action, text);
+      const result = await callModel(model, action, text, deadline);
       workingModel = model;
       return { result, model };
     } catch (err) {
@@ -232,6 +242,9 @@ module.exports = async function handler(req, res) {
   } catch (err) {
     if (err instanceof SyntaxError) return res.status(502).json({ error: "Gemini sent back an unreadable answer. Try again." });
     if (err instanceof GeminiError) {
+      if (err.kind === "timeout") {
+        return res.status(504).json({ error: "Gemini took too long to answer. Please try again; it's usually faster the second time." });
+      }
       if (err.kind === "quota") {
         return res.status(429).json({ error: "Gemini's free limit is used up for now. Wait a minute (or until tomorrow if it's the daily limit) and try again." });
       }
