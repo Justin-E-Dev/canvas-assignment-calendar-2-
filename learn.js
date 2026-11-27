@@ -260,20 +260,22 @@ const LearningCenter = (() => {
   }
 
   let courseColors = {};
+  // A shelf for books that aren't for any class. It works like a class card.
+  const PERSONAL = "My Books";
+  const PERSONAL_COLOR = "#8a94a6";
+
   function render(courses, colors) {
-    courseColors = colors;
+    courseColors = { ...colors, [PERSONAL]: PERSONAL_COLOR };
     const list = document.getElementById("classList");
     list.innerHTML = "";
-    if (!courses.length) {
-      list.innerHTML = `<p class="learn-intro">No classes found yet. Load your Canvas feed first.</p>`;
-      return;
-    }
-    for (const course of courses) {
+    const all = [...courses.filter((c) => c !== PERSONAL), PERSONAL];
+    for (const course of all) {
+      const personal = course === PERSONAL;
       const card = document.createElement("section");
-      card.className = "class-card";
-      card.style.setProperty("--c", colors[course]);
+      card.className = "class-card" + (personal ? " personal" : "");
+      card.style.setProperty("--c", courseColors[course]);
       card.innerHTML = `
-        <div class="class-band"><h3>${esc(course)}</h3></div>
+        <div class="class-band"><h3>${esc(course)}</h3>${personal ? `<span class="class-note">Any book, not tied to a class</span>` : ""}</div>
         <div class="class-body">
           <h4>Books</h4>
           <div class="shelf"></div>
@@ -292,7 +294,7 @@ const LearningCenter = (() => {
     }
   }
 
-  return { render, cleanIsbn };
+  return { render, cleanIsbn, PERSONAL };
 })();
 
 if (typeof module !== "undefined") module.exports = LearningCenter;

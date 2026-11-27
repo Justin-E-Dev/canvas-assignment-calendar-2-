@@ -351,7 +351,7 @@
       res = await fetch("/api/gemini", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payload, book: { ...book, course }, prefer: modelMemory.prefer, avoid: modelMemory.avoid || [] }),
+        body: JSON.stringify({ ...payload, book: { ...book, course: course === "My Books" ? "" : course }, prefer: modelMemory.prefer, avoid: modelMemory.avoid || [] }),
         signal: AbortSignal.timeout(65000),
       });
     } catch (e) {
