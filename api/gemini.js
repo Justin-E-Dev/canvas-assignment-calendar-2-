@@ -117,15 +117,15 @@ After the last section, add "## Key terms" with one "- **Term:** one-line defini
 Write at least 2,500 words of notes, and longer if the chapter needs it to cover everything.
 
 ===CONCEPTS===
-10-12 lines, most important first:
+One line for EVERY new concept, term, process, model, theory or formula the chapter introduces, in the order they appear in the chapter. Don't pick just the most important ones: a typical textbook chapter has 25-50. Format:
 CONCEPT: Short title | 2-3 sentences explaining it, with an example if it helps
 
 ===CARDS===
-25 lines:
+One card for every key term and concept in the chapter (usually 30-60), plus cards for important processes, formulas and comparisons. Format:
 CARD: question or term | clear answer or definition (one or two sentences)
 
 ===QUIZ===
-12 questions that test understanding (not just recall), each in this format, with a blank line between questions:
+15 questions covering the whole chapter (every section), that test understanding (not just recall), each in this format, with a blank line between questions:
 Q: the question
 A) option
 B) option
