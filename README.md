@@ -32,6 +32,12 @@ Book covers are real cover images looked up on Google Books (then Open Library) 
 - **Other books: press "Generate this chapter".** Opening a book loads its chapter list; on each chapter, the button has Google's free Gemini write condensed notes, key concepts, flashcards and a quiz in one request (usually 20–60 seconds). Results are saved in your browser; **Regenerate chapter** (top right) writes it again. Needs a free `GEMINI_API_KEY` in Vercel (Settings → Environment Variables; get one at [Google AI Studio](https://aistudio.google.com/apikey)), then redeploy. Free limits reset daily at midnight Pacific time; each Gemini model has its own limit and the site switches models when one runs out.
 - Notes can also be added to the site itself by asking Claude in a chat ("Add notes for <book title>"), following `notes/HOW-TO-WRITE-NOTES.md`.
 
+## Use it on any device (phone, other computers)
+
+Save your Canvas feed link in Vercel once, and every device loads your calendar without pasting it:
+Vercel → your project → **Settings → Environment Variables** → add `CANVAS_FEED_URL` with your feed link (tick Production) → **Redeploy**.
+The link stays private: it lives only in Vercel, not in this code. (Anyone who opens your site can see your assignments, so keep the site's address to yourself.)
+
 ## Hosting
 
 The site is hosted on [Vercel](https://vercel.com) and connected to this GitHub repository, so every change pushed to `main` goes live automatically.

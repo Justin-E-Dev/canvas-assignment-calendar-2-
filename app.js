@@ -522,6 +522,7 @@ if (typeof document !== "undefined") {
 
   async function fetchFeed(url) {
     // Canvas feed links start with webcal:// sometimes; browsers need https://
+    // An empty link means "use the one saved on the website" (CANVAS_FEED_URL in Vercel).
     const httpsUrl = url.trim().replace(/^webcal:\/\//i, "https://");
 
     if (!location.protocol.startsWith("http")) {
@@ -538,7 +539,7 @@ if (typeof document !== "undefined") {
       res = await fetch("/api/feed", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: httpsUrl }),
+        body: JSON.stringify(httpsUrl ? { url: httpsUrl } : {}),
       });
     } catch {
       throw new Error("Couldn't reach the website's helper. Check your internet connection and try again.");
@@ -546,22 +547,39 @@ if (typeof document !== "undefined") {
     if (res.ok) return await res.text();
 
     let message = `Something went wrong (${res.status}).`;
+    let noDefault = false;
     try {
-      message = (await res.json()).error || message;
+      const data = await res.json();
+      message = data.error || message;
+      noDefault = !!data.noDefault;
     } catch {
       /* not JSON */
     }
-    throw new Error(message + "\nYou can also download the .ics file from Canvas and use \"Load .ics file\".");
+    const err = new Error(message + "\nYou can also download the .ics file from Canvas and use \"Load .ics file\".");
+    err.noDefault = noDefault;
+    throw err;
   }
 
-  async function loadFromUrl(url) {
+  // url "" = use the link saved on the website. If refreshing fails but assignments
+  // are already showing, keep showing them instead of jumping back to setup.
+  async function loadFromUrl(url, { quiet } = {}) {
     setupMessage("Loading…");
     try {
       const text = await fetchFeed(url);
-      save(STORE.feedUrl, url.trim());
+      if (url.trim()) save(STORE.feedUrl, url.trim());
       useIcs(text, "your Canvas feed");
       setupMessage("");
     } catch (err) {
+      const showingData = !$("app").classList.contains("hidden") && state.events.length;
+      if (showingData) {
+        setStatus(`Couldn't refresh just now: ${err.message.split("\n")[0].replace(/\.$/, "")}. Showing your last saved copy.`);
+        return;
+      }
+      if (quiet && err.noDefault) {
+        setupMessage("");
+        showSetup();
+        return;
+      }
       showSetup();
       setupMessage(err.message, true);
     }
@@ -590,8 +608,7 @@ if (typeof document !== "undefined") {
   };
 
   $("refreshBtn").onclick = () => {
-    const url = load(STORE.feedUrl, "");
-    url ? loadFromUrl(url) : showSetup();
+    loadFromUrl(load(STORE.feedUrl, "")); // falls back to the link saved on the website
   };
   $("settingsBtn").onclick = showSetup;
 
@@ -632,9 +649,7 @@ if (typeof document !== "undefined") {
   if (cached) {
     try { useIcs(cached, "last saved copy"); } catch { showSetup(); }
   }
-  if (savedUrl) {
-    loadFromUrl(savedUrl); // refresh in the background
-  } else if (!cached) {
-    showSetup();
-  }
+  // Refresh in the background: from this browser's saved link, or else the one
+  // saved on the website (CANVAS_FEED_URL), so a new device needs no pasting.
+  loadFromUrl(savedUrl, { quiet: true });
 }

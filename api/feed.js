@@ -3,6 +3,8 @@
 // sends the link here (POST /api/feed) and this function fetches it.
 //
 // The link is sent in the request body, not the URL, so it doesn't end up in logs.
+// If the page sends no link, the one saved in Vercel's environment settings
+// (CANVAS_FEED_URL) is used, so the site works on any device without pasting it.
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
@@ -10,7 +12,10 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: "Use POST" });
   }
 
-  let url = (req.body && req.body.url) || "";
+  let url = (req.body && req.body.url) || process.env.CANVAS_FEED_URL || "";
+  if (!url) {
+    return res.status(404).json({ error: "No feed link saved on the website yet.", noDefault: true });
+  }
   url = String(url).trim().replace(/^webcal:\/\//i, "https://");
 
   let target;
