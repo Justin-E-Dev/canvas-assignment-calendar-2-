@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="book.css">
+  <script src="theme.js"></script>
 </head>
 <body>
   <div class="shell">
@@ -30,6 +31,7 @@
       </nav>
       <p class="side-label" id="chaptersLabel">Chapters</p>
       <nav id="chapterNav" class="side-nav chapters" aria-label="Chapters"></nav>
+      <button class="side-theme" type="button" data-theme-btn>Auto mode</button>
       <a class="side-back" href="index.html#learn">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
         Back to Learning Center
@@ -47,6 +49,7 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
           Regenerate chapter
         </button>
+        <button class="top-theme" type="button" data-theme-btn>Auto mode</button>
         <label class="mobile-chapter">
           <span class="sr-only">Chapter</span>
           <select id="chapterSelect"></select>

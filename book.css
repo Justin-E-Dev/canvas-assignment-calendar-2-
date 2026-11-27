@@ -120,6 +120,23 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 :root[data-theme="dark"] .side-nav button.active { background: rgba(255, 255, 255, 0.92); color: #1d2660; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .side-nav button.active { background: rgba(255, 255, 255, 0.92); color: #1d2660; } }
 .ch-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side-theme {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: auto 0 4px;
+  padding: 8px 22px;
+  border: 0;
+  background: none;
+  color: rgba(255, 255, 255, 0.85);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-align: left;
+}
+.side-theme:hover { color: #fff; }
+.side-theme + .side-back { margin-top: 0; }
+.top-theme { display: none; }
 .side-back { display: flex; align-items: center; gap: 8px; margin-top: auto; padding: 8px 22px; color: rgba(255, 255, 255, 0.85); text-decoration: none; font-size: 0.85rem; }
 .side-back:hover { color: #fff; }
 
@@ -480,3 +497,22 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .generate-box p { margin: 0 0 10px; }
 .generate-box .muted { color: var(--muted); }
 .gen-btn { padding: 10px 20px; font-size: 0.9rem; }
+
+/* Phones: the sidebar is hidden, so the color switch sits in the top bar */
+@media (max-width: 900px) {
+  .top-theme {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+    padding: 8px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    font: inherit;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  .top-theme span { display: none; }
+}
