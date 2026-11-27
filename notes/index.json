@@ -1,0 +1,21 @@
+{
+  "books": [
+    {
+      "id": "kurose-ross-8e",
+      "isbns": ["9780136681557", "9780135928615", "9781292405469", "9781292405513"],
+      "match": { "title": "computer networking", "author": "kurose" },
+      "edition": "Computer Networking: A Top-Down Approach, 8th edition (2020)",
+      "source": "Study notes written by Claude from the 8th edition's table of contents and its own knowledge of the book's topics. They follow the book's structure but are not taken from the book, so check anything important against your copy.",
+      "chapters": [
+        { "number": "1", "title": "Computer Networks and the Internet", "file": "notes/kurose-ross-8e/ch1.md" },
+        { "number": "2", "title": "Application Layer", "file": "notes/kurose-ross-8e/ch2.md" },
+        { "number": "3", "title": "Transport Layer", "file": "notes/kurose-ross-8e/ch3.md" },
+        { "number": "4", "title": "The Network Layer: Data Plane", "file": "notes/kurose-ross-8e/ch4.md" },
+        { "number": "5", "title": "The Network Layer: Control Plane", "file": "notes/kurose-ross-8e/ch5.md" },
+        { "number": "6", "title": "The Link Layer and LANs", "file": "notes/kurose-ross-8e/ch6.md" },
+        { "number": "7", "title": "Wireless and Mobile Networks", "file": "notes/kurose-ross-8e/ch7.md" },
+        { "number": "8", "title": "Security in Computer Networks", "file": "notes/kurose-ross-8e/ch8.md" }
+      ]
+    }
+  ]
+}

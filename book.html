@@ -35,24 +35,19 @@
 
     <div id="dash" class="dash hidden">
       <section class="panel notes-panel">
-        <div class="panel-head">
-          <div>
-            <h2>Book Notes</h2>
-            <p class="panel-sub">Summaries of every chapter and section, written by Claude from what it can find online.</p>
+        <div id="chapterBar" class="chapter-bar">
+          <div class="chapter-bar-head">
+            <h2>Chapters</h2>
+            <p id="edition" class="panel-sub"></p>
           </div>
-          <div id="notesTools" class="notes-tools hidden">
-            <button id="moreBtn" class="link-btn" type="button">Add more chapters</button>
-            <button id="redoBtn" class="link-btn" type="button">Get new notes</button>
-          </div>
+          <div id="chapterButtons" class="chapter-buttons"></div>
         </div>
-        <div id="ask"></div>
         <div id="notes" class="notes"></div>
       </section>
 
       <aside class="side-col">
-        <nav id="tocPanel" class="panel toc-panel hidden" aria-label="Chapters">
-          <h2>Chapters</h2>
-          <p id="savedInfo" class="saved-info"></p>
+        <nav id="tocPanel" class="panel toc-panel hidden" aria-label="Sections in this chapter">
+          <h2 id="tocTitle">In this chapter</h2>
           <ol id="toc" class="toc"></ol>
         </nav>
         <section class="panel side-panel">
