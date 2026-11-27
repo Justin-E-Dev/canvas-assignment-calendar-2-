@@ -100,13 +100,75 @@ const LearningCenter = (() => {
   }
 
   // ---------- Rendering ----------
+  // ---------- Real cover images ----------
+  // A cover found once (here or on the book page) is remembered in cac.coverCache.
+  // Books without a working cover get a lookup on Google Books; if that finds
+  // nothing, a plain book icon is shown instead of a made-up cover.
+  const BOOK_ICON = `<svg class="cover-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2V5Z"/><path d="M6 19h12v2H6a2 2 0 0 1 0-4"/></svg>`;
+  const coverKeyOf = (b) => b.isbn || `${b.title}|${(b.authors || [])[0] || ""}`;
+  function coverCache() {
+    try {
+      return JSON.parse(localStorage.getItem("cac.coverCache")) || {};
+    } catch {
+      return {};
+    }
+  }
+  function rememberCover(b, src) {
+    const cache = coverCache();
+    cache[coverKeyOf(b)] = src;
+    try {
+      localStorage.setItem("cac.coverCache", JSON.stringify(cache));
+    } catch {
+      /* storage full or unavailable */
+    }
+  }
+
   function coverHtml(b) {
-    const fallback = `<div class="cover-fallback"><span>${esc(b.title)}</span></div>`;
-    if (!b.cover) return `<div class="cover">${fallback}</div>`;
-    // If the image fails to load, show a plain colored cover with the title.
-    return `<div class="cover"><img src="${esc(b.cover)}" alt="Cover of ${esc(b.title)}" loading="lazy"
-      onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'cover-fallback',innerHTML:this.dataset.fb}))"
-      data-fb="${esc(`<span>${esc(b.title)}</span>`)}"></div>`;
+    const src = coverCache()[coverKeyOf(b)] || b.cover;
+    if (!src) return `<div class="cover no-cover" data-key="${esc(coverKeyOf(b))}">${BOOK_ICON}</div>`;
+    return `<div class="cover" data-key="${esc(coverKeyOf(b))}"><img src="${esc(src)}" alt="Cover of ${esc(b.title)}" loading="lazy"></div>`;
+  }
+
+  async function googleCover(b) {
+    const clean = b.title.replace(/\[[^\]]*\]|\([^)]*\)/g, "").trim();
+    const q = b.isbn ? `isbn:${b.isbn}` : `intitle:${clean}${(b.authors || [])[0] ? `+inauthor:${b.authors[0].split(" ").pop()}` : ""}`;
+    try {
+      const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=3`);
+      if (!res.ok) return null;
+      for (const it of (await res.json()).items || []) {
+        const l = (it.volumeInfo || {}).imageLinks || {};
+        const raw = l.thumbnail || l.smallThumbnail;
+        if (raw) return raw.replace(/^http:/, "https:").replace("&edge=curl", "");
+      }
+    } catch {
+      /* no cover */
+    }
+    return null;
+  }
+
+  // After a list of books is drawn: swap broken or missing covers for real ones.
+  function fixCovers(container, list) {
+    container.querySelectorAll(".cover").forEach((box, i) => {
+      const b = list[i];
+      if (!b) return;
+      const lookUp = async () => {
+        const src = await googleCover(b);
+        if (src) {
+          box.classList.remove("no-cover");
+          box.innerHTML = `<img src="${esc(src)}" alt="Cover of ${esc(b.title)}">`;
+          box.querySelector("img").onerror = () => (box.innerHTML = BOOK_ICON);
+          rememberCover(b, src);
+        } else {
+          box.innerHTML = BOOK_ICON;
+        }
+      };
+      const img = box.querySelector("img");
+      if (!img) lookUp();
+      else img.onerror = () => {
+        box.innerHTML = BOOK_ICON;
+        lookUp();
+      };
+    });
   }
 
   function bookTile(b, buttonLabel, buttonClass) {
@@ -132,6 +194,7 @@ const LearningCenter = (() => {
       return;
     }
     shelf.innerHTML = list.map((b) => bookTile(b, "Remove", "btn-ghost")).join("");
+    fixCovers(shelf, list);
     shelf.querySelectorAll(".book").forEach((el, i) => {
       // "Open" goes to the book's dashboard page.
       const b = list[i];

@@ -24,7 +24,7 @@ You can also download the `.ics` file from Canvas and use **Load .ics file** ins
 
 ## Book Notes
 
-Book notes are part of the website itself, so there's nothing to copy, paste or pay for. Open a book in the Learning Center and its chapter numbers are listed; pick one to read detailed notes for every section of that chapter.
+Book covers are real cover images looked up on Google Books (then Open Library) by ISBN. Book notes are part of the website itself, so there's nothing to copy, paste or pay for. Open a book in the Learning Center and its chapter numbers are listed; pick one to read detailed notes for every section of that chapter.
 
 - `notes/index.json` lists the books that have notes (matched by ISBN, or by title and author) and their chapters.
 - Each chapter's notes are a Markdown file, for example `notes/kurose-ross-8e/ch3.md`.
@@ -44,7 +44,7 @@ The site is hosted on [Vercel](https://vercel.com) and connected to this GitHub 
 | `index.html` | The page layout |
 | `style.css` | How it looks (also supports dark mode) |
 | `app.js` | Reads the feed and draws the calendar |
-| `book.html`, `book.js` | The book dashboard page, with Book Notes |
+| `book.html`, `book.js`, `book.css` | The book dashboard: chapters in a sidebar, and notes, key concepts, flashcards and quiz in panels that each scroll on their own |
 | `notes/` | The book notes: an index plus one Markdown file per chapter |
 | `learn.js` | The Learning Center tab (class cards and book search) |
 | `api/feed.js` | Runs on Vercel and downloads the Canvas feed for the page |

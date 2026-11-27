@@ -1,5 +1,7 @@
 // Book dashboard: opened from a book in the Learning Center.
-// URL: book.html?course=<class>&book=<ISBN or title>&c=<class color>
+// URL: book.html?course=<class>&book=<ISBN or title>
+// Layout: a one-screen dashboard. Notes, key concepts, flashcards and the quiz
+// each sit in their own panel that scrolls on its own.
 
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -26,46 +28,12 @@
   const params = new URLSearchParams(location.search);
   const course = params.get("course") || "";
   const bookId = params.get("book") || "";
-  const color = /^#[0-9a-f]{6}$/i.test(params.get("c") || "") ? params.get("c") : "#ff5a36";
-  document.documentElement.style.setProperty("--c", color);
 
   const book = (load("cac.books", {})[course] || []).find((b) => (b.isbn || b.title) === bookId);
   if (!book) {
     $("missing").classList.remove("hidden");
     return;
   }
-
-  // ---------- Header ----------
-  document.title = `${book.title} – Book Dashboard`;
-  $("heroCourse").textContent = course;
-  $("heroTitle").textContent = book.title;
-  $("heroAuthors").textContent = (book.authors || []).join(", ");
-  $("heroMeta").textContent = [book.year, book.isbn && `ISBN ${book.isbn}`].filter(Boolean).join(" · ");
-  $("heroCover").innerHTML = book.cover
-    ? `<img src="${esc(book.cover)}" alt="Cover of ${esc(book.title)}">`
-    : `<div class="cover-fallback"><span>${esc(book.title)}</span></div>`;
-  const img = $("heroCover").querySelector("img");
-  if (img) img.onerror = () => ($("heroCover").innerHTML = `<div class="cover-fallback"><span>${esc(book.title)}</span></div>`);
-
-  const about = [
-    ["Class", course],
-    ["Author", (book.authors || []).join(", ")],
-    ["Published", book.year],
-    ["ISBN", book.isbn],
-  ].filter(([, v]) => v);
-  const q = encodeURIComponent(book.isbn || `${book.title} ${(book.authors || [])[0] || ""}`);
-  $("aboutList").innerHTML =
-    about.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("") +
-    `<dt>Find it</dt><dd><a href="https://openlibrary.org/search?q=${q}" target="_blank" rel="noopener">Open Library</a> ·
-      <a href="https://www.google.com/search?tbm=bks&q=${q}" target="_blank" rel="noopener">Google Books</a></dd>`;
-
-  $("bookHero").classList.remove("hidden");
-  $("dash").classList.remove("hidden");
-
-
-  // ---------- Book notes ----------
-  // Notes live in the site itself: notes/index.json says which books have notes,
-  // and each chapter is a Markdown file. Pick a chapter number to load its notes.
 
   // Does this saved book match a book in the notes index? (ISBN first, then title + author)
   function findNotes(index) {
@@ -146,9 +114,6 @@
     return { html: `<section class="note-section intro">${html.join("")}</section>`, sections };
   }
 
-  // ---------- Study tools: key concepts, flashcards, practice quiz ----------
-  // Each chapter can have a "<chapter>.study.json" file next to its notes.
-
   const quizScores = load("cac.quizScores", {}); // { "<book id>:<chapter>": { score, total, date } }
 
   function shuffled(list) {
@@ -158,18 +123,6 @@
       [a[i], a[j]] = [a[j], a[i]];
     }
     return a;
-  }
-
-  function keyConceptsHtml(study) {
-    return `<section class="study-block" id="key-concepts">
-      <h3 class="study-title">Key Concepts</h3>
-      <div class="concept-grid">
-        ${study.keyConcepts.map((k, i) => `<article class="concept-card">
-          <span class="concept-num">${i + 1}</span>
-          <div><h4>${inline(k.title)}</h4><p>${inline(k.text)}</p></div>
-        </article>`).join("")}
-      </div>
-    </section>`;
   }
 
   // Flashcards: one card at a time; click (or Space) to flip, arrows to move.
@@ -205,25 +158,6 @@
     show();
   }
 
-  function flashcardsHtml(study) {
-    return `<section class="study-block" id="flashcards">
-      <h3 class="study-title">Flashcards</h3>
-      <p class="study-sub">Click the card (or press Space) to flip it. Use the arrows to move between cards.</p>
-      <div class="fc-wrap">
-        <div class="flashcard" tabindex="0" role="button">
-          <div class="fc-face fc-front"></div>
-          <div class="fc-face fc-back"></div>
-        </div>
-        <div class="fc-controls">
-          <button class="btn btn-ghost fc-prev" type="button" aria-label="Previous card">&larr;</button>
-          <span class="fc-count"></span>
-          <button class="btn btn-ghost fc-next" type="button" aria-label="Next card">&rarr;</button>
-          <button class="link-btn fc-shuffle" type="button">Shuffle</button>
-        </div>
-      </div>
-    </section>`;
-  }
-
   // Practice quiz: answer each question to see if you're right and why; score at the end.
   function setupQuiz(root, questions, scoreKey) {
     const render = () => {
@@ -245,7 +179,7 @@
       const scoreEl = root.querySelector(".quiz-score");
       const updateScore = () => {
         scoreEl.innerHTML = answered < qs.length
-          ? `Answered ${answered} of ${qs.length} · ${correct} correct${best ? ` · Last time: ${best.score}/${best.total}` : ""}`
+          ? `${answered}/${qs.length} answered · ${correct} correct${best ? ` · last ${best.score}/${best.total}` : ""}`
           : `<strong>Score: ${correct} / ${qs.length} (${Math.round((correct / qs.length) * 100)}%)</strong> · ${
               correct === qs.length ? "Perfect!" : correct / qs.length >= 0.8 ? "Great job!" : correct / qs.length >= 0.6 ? "Good. Review the ones you missed." : "Keep studying and try again."}`;
       };
@@ -269,6 +203,7 @@
             if (answered === qs.length) {
               quizScores[scoreKey] = { score: correct, total: qs.length, date: new Date().toISOString() };
               save("cac.quizScores", quizScores);
+              updateStats();
             }
             updateScore();
           };
@@ -277,82 +212,173 @@
     };
     root.querySelector(".quiz-retake").onclick = () => {
       render();
-      root.scrollIntoView({ behavior: "smooth", block: "start" });
+      root.querySelector(".quiz-scroll").scrollTop = 0;
     };
     render();
   }
 
-  function quizHtml(study) {
-    return `<section class="study-block" id="quiz">
-      <h3 class="study-title">Practice Quiz</h3>
-      <p class="study-sub">${study.quiz.length} multiple-choice questions. Pick an answer to see if you're right and why. Questions and answers are shuffled each time.</p>
-      <ol class="quiz-list"></ol>
-      <div class="quiz-bottom">
-        <p class="quiz-score"></p>
-        <button class="btn quiz-retake" type="button">Retake quiz</button>
-      </div>
-    </section>`;
+
+  // ---------- Header and book card ----------
+  document.title = `${book.title} – Book Dashboard`;
+  $("topCourse").textContent = course;
+  $("topTitle").textContent = book.title;
+  $("bookTitle").textContent = book.title;
+  $("bookAuthors").textContent = (book.authors || []).join(", ");
+  $("bookMeta").textContent = [book.year, book.isbn && `ISBN ${book.isbn}`].filter(Boolean).join(" · ");
+  $("stats").classList.remove("hidden");
+  $("panels").classList.remove("hidden");
+
+  // ---------- Real cover image ----------
+  // Tries Google Books (by ISBN, then by title + author), then Open Library, then the
+  // cover saved when the book was added. If none loads, a plain book icon is shown.
+  const BOOK_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2V5Z"/><path d="M6 19h12v2H6a2 2 0 0 1 0-4"/></svg>`;
+  const coverCache = load("cac.coverCache", {});
+  const coverKey = book.isbn || `${book.title}|${(book.authors || [])[0] || ""}`;
+
+  function tryImage(src) {
+    return new Promise((resolve) => {
+      if (!src) return resolve(null);
+      const img = new Image();
+      img.onload = () => resolve(img.naturalWidth > 20 && img.naturalHeight > 20 ? src : null);
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
   }
 
-  let entry = null;
+  async function googleBooksCover() {
+    const cleanTitle = book.title.replace(/\[[^\]]*\]|\([^)]*\)/g, "").trim();
+    const queries = [];
+    if (book.isbn) queries.push(`isbn:${book.isbn}`);
+    queries.push(`intitle:${cleanTitle}${(book.authors || [])[0] ? `+inauthor:${book.authors[0].split(" ").pop()}` : ""}`);
+    for (const q of queries) {
+      try {
+        const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=5`);
+        if (!res.ok) continue;
+        const items = (await res.json()).items || [];
+        for (const it of items) {
+          const links = (it.volumeInfo || {}).imageLinks || {};
+          const raw = links.thumbnail || links.smallThumbnail;
+          if (raw) return raw.replace(/^http:/, "https:").replace("&edge=curl", "");
+        }
+      } catch {
+        /* try the next source */
+      }
+    }
+    return null;
+  }
 
-  async function showChapter(i, scroll) {
+  async function loadCover() {
+    const box = $("cover");
+    const show = (src) => {
+      box.innerHTML = src ? `<img src="${esc(src)}" alt="Cover of ${esc(book.title)}">` : BOOK_ICON;
+    };
+    if (coverCache[coverKey]) show(coverCache[coverKey]);
+    else box.innerHTML = BOOK_ICON;
+
+    const candidates = [
+      async () => googleBooksCover(),
+      async () => book.isbn && `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(book.isbn)}-L.jpg?default=false`,
+      async () => book.cover,
+    ];
+    for (const next of candidates) {
+      const src = await tryImage(await next());
+      if (src) {
+        if (src !== coverCache[coverKey]) {
+          coverCache[coverKey] = src;
+          save("cac.coverCache", coverCache);
+          show(src);
+        }
+        return;
+      }
+    }
+    if (coverCache[coverKey]) return; // keep the last good one
+    show(null);
+  }
+  loadCover();
+
+  // ---------- Panels ----------
+  let entry = null;
+  let current = null; // index of the chapter shown
+
+  function updateStats() {
+    if (!entry || current === null) return;
+    const ch = entry.chapters[current];
+    const best = quizScores[`${entry.id}:${ch.number}`];
+    $("statScore").textContent = best ? `${best.score}/${best.total}` : "–";
+    $("statScoreLabel").textContent = best ? `Last quiz score · Ch. ${ch.number}` : "No quiz taken yet";
+  }
+
+  function setChapterActive(i) {
+    document.querySelectorAll("#chapterNav button").forEach((b, j) => {
+      b.classList.toggle("active", j === i);
+      if (j === i) b.setAttribute("aria-current", "true");
+      else b.removeAttribute("aria-current");
+    });
+    $("chapterSelect").value = String(i);
+  }
+
+  async function showChapter(i) {
     const ch = entry.chapters[i];
     if (!ch) return;
-    document.querySelectorAll(".ch-btn").forEach((b, j) => b.classList.toggle("active", j === i));
+    current = i;
+    setChapterActive(i);
     history.replaceState(null, "", `#chapter-${ch.number}`);
-    $("notes").innerHTML = `<p class="muted">Loading Chapter ${esc(ch.number)}…</p>`;
+    $("statChapter").textContent = `Chapter ${ch.number}`;
+    $("statChapterTitle").textContent = ch.title;
+    $("notesBody").innerHTML = `<p class="empty">Loading Chapter ${esc(ch.number)}…</p>`;
     try {
-      const studyFile = ch.file.replace(/\.md$/, ".study.json");
-      const [res, studyRes] = await Promise.all([fetch(ch.file), fetch(studyFile).catch(() => null)]);
+      const [res, studyRes] = await Promise.all([
+        fetch(ch.file),
+        fetch(ch.file.replace(/\.md$/, ".study.json")).catch(() => null),
+      ]);
       if (!res.ok) throw new Error();
       const { html, sections } = renderMarkdown(await res.text());
       let study = null;
       try {
         if (studyRes && studyRes.ok) study = await studyRes.json();
       } catch {
-        study = null; // notes still work without the study tools
+        study = null;
       }
-      const parts = study ? [
-        ["key-concepts", "Key Concepts"], ["flashcards", "Flashcards"], ["quiz", "Practice Quiz"], ["full-notes", "Full Notes"],
-      ] : [];
-      $("notes").innerHTML = `
-        <header class="chapter-head">
-          <span class="chapter-num">${esc(ch.number)}</span>
-          <div><p class="eyebrow">Chapter ${esc(ch.number)}</p><h3>${esc(ch.title)}</h3></div>
-        </header>
-        ${parts.length ? `<nav class="jump-bar" aria-label="Jump to">${parts.map(([id, label]) => `<a href="#${id}">${label}</a>`).join("")}</nav>` : ""}
-        ${study ? keyConceptsHtml(study) + flashcardsHtml(study) + quizHtml(study) : ""}
-        ${study ? `<h3 class="study-title full-notes-title" id="full-notes">Full Notes</h3>` : ""}
-        ${html}
-        <div class="chapter-nav">
-          ${i > 0 ? `<button class="btn btn-ghost" data-go="${i - 1}">&larr; Chapter ${esc(entry.chapters[i - 1].number)}</button>` : "<span></span>"}
-          ${i < entry.chapters.length - 1 ? `<button class="btn" data-go="${i + 1}">Chapter ${esc(entry.chapters[i + 1].number)} &rarr;</button>` : ""}
-        </div>
-        <p class="notes-foot">${esc(entry.source)}</p>`;
-      $("notes").querySelectorAll("[data-go]").forEach((b) => (b.onclick = () => showChapter(Number(b.dataset.go), true)));
+
+      // Notes
+      $("notesBody").innerHTML = `${html}<p class="notes-foot">${esc(entry.source)}</p>`;
+      $("notesBody").scrollTop = 0;
+      $("sectionJump").innerHTML = `<option value="">Jump to section…</option>` +
+        sections.map((s) => `<option value="${s.id}">${esc([s.number, s.title].filter(Boolean).join(" "))}</option>`).join("");
+      $("sectionJump").onchange = () => {
+        const target = document.getElementById($("sectionJump").value);
+        if (target) $("notesBody").scrollTo({ top: target.offsetTop - $("notesBody").offsetTop - 8, behavior: "smooth" });
+      };
+
+      // Key concepts, flashcards, quiz
       if (study) {
+        $("conceptsBody").innerHTML = `<ol class="concepts">${study.keyConcepts.map((k, n) => `
+          <li class="concept"><span class="concept-num">${n + 1}</span>
+            <div><h4>${inline(k.title)}</h4><p>${inline(k.text)}</p></div></li>`).join("")}</ol>`;
+        $("conceptsBody").scrollTop = 0;
+        $("statCards").textContent = study.flashcards.length;
         setupFlashcards($("flashcards"), study.flashcards);
         setupQuiz($("quiz"), study.quiz, `${entry.id}:${ch.number}`);
+        $("quiz").querySelector(".quiz-scroll").scrollTop = 0;
+        document.querySelectorAll(".p-concepts, .p-cards, .p-quiz").forEach((p) => p.classList.remove("hidden"));
+      } else {
+        $("statCards").textContent = "–";
+        document.querySelectorAll(".p-concepts, .p-cards, .p-quiz").forEach((p) => p.classList.add("hidden"));
       }
-      $("notes").querySelectorAll(".jump-bar a").forEach((a) => (a.onclick = (ev) => {
-        ev.preventDefault();
-        document.getElementById(a.getAttribute("href").slice(1)).scrollIntoView({ behavior: "smooth", block: "start" });
-      }));
-      const studyLinks = parts.slice(0, 3).map(([id, label]) => `<li><a href="#${id}"><span>★</span>${label}</a></li>`).join("");
-      $("toc").innerHTML = studyLinks + sections
-        .map((s) => `<li><a href="#${s.id}"><span>${esc(s.number)}</span>${esc(s.title)}</a></li>`)
-        .join("");
-      $("toc").querySelectorAll("a").forEach((a) => (a.onclick = (ev) => {
-        ev.preventDefault();
-        document.getElementById(a.getAttribute("href").slice(1)).scrollIntoView({ behavior: "smooth", block: "start" });
-      }));
-      $("tocTitle").textContent = `In Chapter ${ch.number}`;
-      $("tocPanel").classList.remove("hidden");
-      if (scroll) $("chapterBar").scrollIntoView({ behavior: "smooth", block: "start" });
+      updateStats();
     } catch {
-      $("notes").innerHTML = `<p class="notes-error">Couldn't load this chapter's notes. Check your connection and try again.</p>`;
+      $("notesBody").innerHTML = `<p class="empty">Couldn't load this chapter. Check your connection and try again.</p>`;
     }
+  }
+
+  function noNotes(message) {
+    $("chaptersLabel").classList.add("hidden");
+    $("chapterNav").classList.add("hidden");
+    $("chapterSelect").parentElement.classList.add("hidden");
+    document.querySelectorAll(".p-concepts, .p-cards, .p-quiz").forEach((p) => p.classList.add("hidden"));
+    $("sectionJump").classList.add("hidden");
+    $("panels").classList.add("single");
+    $("notesBody").innerHTML = message;
   }
 
   async function start() {
@@ -361,35 +387,33 @@
       const res = await fetch("notes/index.json", { cache: "no-cache" });
       index = await res.json();
     } catch {
-      $("notes").innerHTML = `<p class="notes-error">Couldn't load the notes. Check your connection and refresh the page.</p>`;
+      noNotes(`<p class="empty">Couldn't load the notes. Check your connection and refresh the page.</p>`);
       return;
     }
     entry = findNotes(index);
     if (!entry) {
-      $("chapterBar").classList.add("hidden");
-      $("notes").innerHTML = `<div class="empty-notes">
-        <p><strong>No notes for this book yet.</strong></p>
-        <p>To get them, ask Claude in a Claude Code chat for this website: “Add notes for ${esc(book.title)}”. Claude will look the book up and add notes for every chapter here.</p>
-      </div>`;
+      noNotes(`<p class="empty"><strong>No notes for this book yet.</strong><br>
+        To get them, ask Claude in a Claude Code chat for this website: “Add notes for ${esc(book.title)}”.
+        Claude will look the book up and add notes, key concepts, flashcards and a quiz for every chapter.</p>`);
       return;
     }
-    $("edition").textContent = entry.edition;
-    $("chapterButtons").innerHTML = entry.chapters
-      .map((ch, i) => `<button class="ch-btn" type="button" data-i="${i}" title="${esc(ch.title)}">
-          <span class="ch-btn-num">${esc(ch.number)}</span><span class="ch-btn-title">${esc(ch.title)}</span></button>`)
-      .join("");
-    $("chapterButtons").querySelectorAll(".ch-btn").forEach((b) => (b.onclick = () => showChapter(Number(b.dataset.i), false)));
+    $("chapterNav").innerHTML = entry.chapters.map((ch, i) => `
+      <button type="button" data-i="${i}" title="${esc(ch.title)}">
+        <span class="ch-num">${esc(ch.number)}</span><span class="ch-name">${esc(ch.title)}</span>
+      </button>`).join("");
+    $("chapterNav").querySelectorAll("button").forEach((b) => (b.onclick = () => showChapter(Number(b.dataset.i))));
+    $("chapterSelect").innerHTML = entry.chapters
+      .map((ch, i) => `<option value="${i}">Chapter ${esc(ch.number)}: ${esc(ch.title)}</option>`).join("");
+    $("chapterSelect").onchange = () => showChapter(Number($("chapterSelect").value));
 
-    // Typing or pasting a #chapter-N address switches to that chapter.
     window.addEventListener("hashchange", () => {
       const n = (location.hash.match(/^#chapter-(.+)$/) || [])[1];
       const j = entry.chapters.findIndex((c) => c.number === n);
-      if (j >= 0) showChapter(j, true);
+      if (j >= 0 && j !== current) showChapter(j);
     });
     const fromHash = (location.hash.match(/^#chapter-(.+)$/) || [])[1];
     const i = entry.chapters.findIndex((c) => c.number === fromHash);
-    if (i >= 0) showChapter(i, false);
-    else $("notes").innerHTML = `<p class="muted pick-hint">Pick a chapter above to read its notes.</p>`;
+    showChapter(i >= 0 ? i : 0);
   }
 
   start();
