@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#2F3437">
+  <title>Mileage Assist</title>
+  <link rel="icon" href="/img/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<header class="nav">
+  <div class="nav-greeting">Hello, <span id="first-name"></span></div>
+  <div class="nav-center"><img class="nav-logo" src="/img/logo.svg" alt="Mileage Assist"></div>
+  <div class="nav-account">
+    <button class="account-btn" id="account-btn" aria-haspopup="menu" aria-expanded="false">
+      <span class="account-avatar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Zm0 2c-4.4 0-8 2.2-8 5v1.5c0 .3.2.5.5.5h15c.3 0 .5-.2.5-.5V19c0-2.8-3.6-5-8-5Z"/></svg></span>
+      <span class="account-email" id="account-email"></span>
+    </button>
+    <div class="menu-pop" id="account-menu" role="menu" hidden>
+      <div class="who">Signed in as <strong id="menu-email"></strong></div>
+      <button role="menuitem" id="setup-passkey">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.5a6.8 6.8 0 0 0-6.8 6.8v1.2a.75.75 0 0 0 1.5 0v-1.2a5.3 5.3 0 0 1 10.6 0c0 1.9-.2 3.7-.7 5.5a.75.75 0 0 0 1.4.4c.5-1.9.8-3.9.8-5.9A6.8 6.8 0 0 0 12 6.5Zm0 3.2a3.6 3.6 0 0 0-3.6 3.6c0 2.3-.5 4.5-1.6 6.5a.75.75 0 1 0 1.3.7 15 15 0 0 0 1.8-7.2 2.1 2.1 0 0 1 4.2 0c0 3.1-.6 6.2-1.9 9a.75.75 0 1 0 1.4.6c1.4-3 2-6.3 2-9.6A3.6 3.6 0 0 0 12 9.7Z"/></svg>
+        <span id="passkey-label">Set up biometric login</span>
+      </button>
+      <button role="menuitem" id="sign-out">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l1.4-1.4-2.6-2.6H20v-2H8.8l2.6-2.6L10 7l-5 5 5 5ZM4 5h8V3H4a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h8v-2H4V5Z"/></svg>
+        Sign out
+      </button>
+    </div>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist" aria-label="Menu">
+  <button class="tab" role="tab" data-view="log" aria-selected="true">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3h-1V1h-2v2H8V1H6v2H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Zm0 16H5V8h14v11ZM7 10h5v5H7v-5Z"/></svg>
+    Daily Log
+  </button>
+  <button class="tab" role="tab" data-view="sheet" aria-selected="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2ZM9 19H5v-3h4v3Zm0-5H5v-3h4v3Zm0-5H5V5h4v4Zm10 10h-8v-3h8v3Zm0-5h-8v-3h8v3Zm0-5h-8V5h8v4Z"/></svg>
+    Spreadsheet
+  </button>
+</nav>
+
+<main>
+  <section id="view-log">
+    <div class="card">
+      <h2>Log a trip</h2>
+      <p class="sub">Today's date is filled in automatically.</p>
+      <form id="entry-form" class="form-grid" novalidate>
+        <div class="field">
+          <label for="f-date">Date</label>
+          <input id="f-date" type="text" readonly tabindex="-1">
+        </div>
+        <div class="field">
+          <label for="f-initials">Initials</label>
+          <input id="f-initials" list="initials-list" maxlength="10" autocomplete="off" autocapitalize="characters" required placeholder="e.g. JE">
+          <datalist id="initials-list"></datalist>
+          <div class="chips" id="initials-chips"></div>
+        </div>
+        <div class="field">
+          <label for="f-start-loc">Start location</label>
+          <input id="f-start-loc" maxlength="200" autocomplete="off" required>
+        </div>
+        <div class="field">
+          <label for="f-end-loc">End location</label>
+          <input id="f-end-loc" maxlength="200" autocomplete="off" required>
+        </div>
+        <div class="field">
+          <label for="f-odo-start">Odometer start</label>
+          <input id="f-odo-start" type="number" inputmode="decimal" min="0" step="0.1" required>
+        </div>
+        <div class="field">
+          <label for="f-odo-end">Odometer end</label>
+          <input id="f-odo-end" type="number" inputmode="decimal" min="0" step="0.1" required>
+        </div>
+        <div class="field full">
+          <div class="miles-readout">Trip distance <strong id="f-miles">0.0</strong> miles</div>
+        </div>
+        <div class="field full">
+          <p class="error" id="entry-error" role="alert"></p>
+          <div class="actions">
+            <button class="btn btn-primary" type="submit">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2Z"/></svg>
+              Save trip
+            </button>
+            <button class="btn btn-ghost" type="reset">Clear</button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Today's trips</h2>
+      <p class="sub" id="today-total"></p>
+      <ul class="trip-list" id="today-list"></ul>
+    </div>
+  </section>
+
+  <section id="view-sheet" hidden>
+    <div class="card">
+      <div class="sheet-toolbar">
+        <div>
+          <h2>Mileage spreadsheet</h2>
+          <div class="sheet-stats"><span><b id="s-rows">0</b> trips</span><span><b id="s-miles">0.0</b> total miles</span></div>
+        </div>
+        <div class="actions">
+          <a class="btn btn-ghost" href="/api/export/csv" download>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14v-2H5v2ZM19 9h-4V3H9v6H5l7 7 7-7Z"/></svg>
+            Export as CSV
+          </a>
+          <a class="btn btn-primary" href="/api/export/xlsx" download>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16c0 1.1.9 2 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm-1.2 15-1.8-2.9L9.2 17H7.4l2.7-4.1L7.6 9h1.8l1.6 2.6L12.6 9h1.8l-2.5 3.9 2.7 4.1h-1.8ZM13 9V3.5L18.5 9H13Z"/></svg>
+            Open in Excel
+          </a>
+        </div>
+      </div>
+      <p class="sub">Click or tap any cell to edit it. Changes save automatically.</p>
+      <div class="sheet-wrap">
+        <table class="sheet">
+          <thead>
+            <tr>
+              <th class="col-date">Date</th>
+              <th class="col-ini">Initials</th>
+              <th>Start Location</th>
+              <th>End Location</th>
+              <th class="col-num">Odometer Start</th>
+              <th class="col-num">Odometer End</th>
+              <th class="col-miles">Miles</th>
+              <th><span class="visually-hidden" aria-label="Actions"></span></th>
+            </tr>
+          </thead>
+          <tbody id="sheet-body"></tbody>
+        </table>
+      </div>
+      <p class="empty" id="sheet-empty" hidden>No trips yet. Log your first trip from the Daily Log tab.</p>
+    </div>
+  </section>
+</main>
+<script src="/js/common.js"></script>
+<script src="/js/webauthn.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>
