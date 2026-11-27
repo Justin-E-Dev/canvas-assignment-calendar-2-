@@ -1,0 +1,24 @@
+{
+  "name": "mileage-assist",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Mileage Assist: daily mileage log with passkey login, spreadsheets, templates and a reimbursement dashboard.",
+  "type": "commonjs",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "dev": "node dev-server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@node-rs/argon2": "2.2.2",
+    "@simplewebauthn/server": "14.1.0",
+    "exceljs": "4.4.0",
+    "jszip": "3.10.2",
+    "pg": "8.23.1"
+  },
+  "overrides": {
+    "uuid": "11.1.1"
+  }
+}

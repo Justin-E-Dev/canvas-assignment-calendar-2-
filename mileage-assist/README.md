@@ -1,5 +1,7 @@
 # Mileage Assist
 
+> **Superseded:** the app now runs on Vercel from `../mileage-assist-web`. This Java version still runs locally but is no longer updated.
+
 A daily mileage log for desktop and mobile, written in Java (Spring Boot 3.5, Java 21).
 It uses no AI and no paid services at runtime: everything runs on your own server.
 

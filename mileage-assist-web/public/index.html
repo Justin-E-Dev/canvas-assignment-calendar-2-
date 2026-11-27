@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#2F3437">
+  <title>Mileage Assist</title>
+  <link rel="icon" href="/img/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<header class="nav">
+  <div class="nav-greeting">Hello, <span id="first-name"></span></div>
+  <div class="nav-center"><img class="nav-logo" src="/img/logo.svg" alt="Mileage Assist"></div>
+  <div class="nav-account">
+    <button class="account-btn" id="account-btn" aria-haspopup="menu" aria-expanded="false">
+      <span class="account-avatar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Zm0 2c-4.4 0-8 2.2-8 5v1.5c0 .3.2.5.5.5h15c.3 0 .5-.2.5-.5V19c0-2.8-3.6-5-8-5Z"/></svg></span>
+      <span class="account-email" id="account-email"></span>
+    </button>
+    <div class="menu-pop" id="account-menu" role="menu" hidden>
+      <div class="who">Signed in as <strong id="menu-email"></strong></div>
+      <button role="menuitem" id="setup-passkey">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.5a6.8 6.8 0 0 0-6.8 6.8v1.2a.75.75 0 0 0 1.5 0v-1.2a5.3 5.3 0 0 1 10.6 0c0 1.9-.2 3.7-.7 5.5a.75.75 0 0 0 1.4.4c.5-1.9.8-3.9.8-5.9A6.8 6.8 0 0 0 12 6.5Zm0 3.2a3.6 3.6 0 0 0-3.6 3.6c0 2.3-.5 4.5-1.6 6.5a.75.75 0 1 0 1.3.7 15 15 0 0 0 1.8-7.2 2.1 2.1 0 0 1 4.2 0c0 3.1-.6 6.2-1.9 9a.75.75 0 1 0 1.4.6c1.4-3 2-6.3 2-9.6A3.6 3.6 0 0 0 12 9.7Z"/></svg>
+        <span id="passkey-label">Set up biometric login</span>
+      </button>
+      <button role="menuitem" id="sign-out">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l1.4-1.4-2.6-2.6H20v-2H8.8l2.6-2.6L10 7l-5 5 5 5ZM4 5h8V3H4a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h8v-2H4V5Z"/></svg>
+        Sign out
+      </button>
+    </div>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist" aria-label="Menu">
+  <button class="tab" role="tab" data-view="log" aria-selected="true">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3h-1V1h-2v2H8V1H6v2H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Zm0 16H5V8h14v11ZM7 10h5v5H7v-5Z"/></svg>
+    Daily Log
+  </button>
+  <button class="tab" role="tab" data-view="sheet" aria-selected="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2ZM9 19H5v-3h4v3Zm0-5H5v-3h4v3Zm0-5H5V5h4v4Zm10 10h-8v-3h8v3Zm0-5h-8v-3h8v3Zm0-5h-8V5h8v4Z"/></svg>
+    Spreadsheet
+  </button>
+  <button class="tab" role="tab" data-view="dash" aria-selected="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h8V3H3v10Zm0 8h8v-6H3v6Zm10 0h8V11h-8v10Zm0-18v6h8V3h-8Z"/></svg>
+    Dashboard
+  </button>
+</nav>
+
+<main>
+  <section id="view-log">
+    <div class="card">
+      <h2>Log a trip</h2>
+      <p class="sub">Today's date is filled in automatically.</p>
+      <form id="entry-form" class="form-grid" novalidate>
+        <div class="field">
+          <label for="f-date">Date</label>
+          <input id="f-date" type="text" readonly tabindex="-1">
+        </div>
+        <div class="field">
+          <label for="f-initials">Initials</label>
+          <input id="f-initials" list="initials-list" maxlength="10" autocomplete="off" autocapitalize="characters" required placeholder="e.g. JE">
+          <datalist id="initials-list"></datalist>
+          <div class="chips" id="initials-chips"></div>
+        </div>
+        <div class="field">
+          <label for="f-start-loc">Start location</label>
+          <input id="f-start-loc" maxlength="200" autocomplete="off" required>
+        </div>
+        <div class="field">
+          <label for="f-end-loc">End location</label>
+          <input id="f-end-loc" list="clients-list" maxlength="200" autocomplete="off" required>
+          <datalist id="clients-list"></datalist>
+        </div>
+        <div class="field full">
+          <label for="f-program">Program</label>
+          <input id="f-program" list="programs-list" maxlength="100" autocomplete="off" required placeholder="Choose or type a program">
+          <datalist id="programs-list"></datalist>
+          <div class="chips" id="programs-chips"></div>
+          <span class="hint" id="program-hint">Fills in automatically for clients you've logged before.</span>
+        </div>
+        <div class="field">
+          <label for="f-odo-start">Odometer start</label>
+          <input id="f-odo-start" type="number" inputmode="decimal" min="0" step="0.1" required>
+        </div>
+        <div class="field">
+          <label for="f-odo-end">Odometer end</label>
+          <input id="f-odo-end" type="number" inputmode="decimal" min="0" step="0.1" required>
+        </div>
+        <div class="field full">
+          <div class="miles-readout">Trip distance <strong id="f-miles">0.0</strong> miles</div>
+        </div>
+        <div class="field full">
+          <p class="error" id="entry-error" role="alert"></p>
+          <div class="actions">
+            <button class="btn btn-primary" type="submit">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2Z"/></svg>
+              Save trip
+            </button>
+            <button class="btn btn-ghost" type="reset">Clear</button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Today's trips</h2>
+      <p class="sub" id="today-total"></p>
+      <ul class="trip-list" id="today-list"></ul>
+    </div>
+  </section>
+
+  <section id="view-sheet" hidden>
+    <div class="card">
+      <div class="sheet-toolbar">
+        <div>
+          <h2>Mileage spreadsheet</h2>
+          <div class="sheet-stats"><span><b id="s-rows">0</b> trips</span><span><b id="s-miles">0.0</b> total miles</span></div>
+        </div>
+        <div class="actions">
+          <button class="btn btn-ghost" type="button" id="all-csv">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14v-2H5v2ZM19 9h-4V3H9v6H5l7 7 7-7Z"/></svg>
+            Export as CSV
+          </button>
+          <button class="btn btn-primary" type="button" id="all-xlsx">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16c0 1.1.9 2 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm-1.2 15-1.8-2.9L9.2 17H7.4l2.7-4.1L7.6 9h1.8l1.6 2.6L12.6 9h1.8l-2.5 3.9 2.7 4.1h-1.8ZM13 9V3.5L18.5 9H13Z"/></svg>
+            Open in Excel
+          </button>
+        </div>
+      </div>
+
+      <div class="sheet-controls">
+        <div class="field">
+          <label for="o-by">Organize by</label>
+          <select id="o-by">
+            <option value="">Nothing (date order)</option>
+            <option value="program">Program</option>
+            <option value="endLocation">End location (client)</option>
+            <option value="startLocation">Start location</option>
+            <option value="initials">Initials</option>
+            <option value="date">Date</option>
+            <option value="odometerStart">Odometer start</option>
+            <option value="odometerEnd">Odometer end</option>
+            <option value="miles">Miles</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="o-order">Dates</label>
+          <select id="o-order">
+            <option value="asc">Oldest first</option>
+            <option value="desc">Newest first</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="o-rows">Rows per spreadsheet</label>
+          <input id="o-rows" type="number" inputmode="numeric" min="1" max="5000" step="1" placeholder="All rows">
+        </div>
+        <label class="check" id="o-split-wrap">
+          <input type="checkbox" id="o-split" checked>
+          <span>Start a new spreadsheet for each <b id="o-split-name">group</b></span>
+        </label>
+      </div>
+
+      <div class="template-box">
+        <div class="template-info">
+          <strong>Template</strong>
+          <span id="t-status">None. Excel files use the standard layout.</span>
+          <span class="hint" id="t-detail">Upload your own Excel form and it will be filled in automatically.</span>
+        </div>
+        <div class="actions">
+          <input type="file" id="t-file" accept=".xlsx,.xlsm" hidden>
+          <button class="btn btn-ghost" type="button" id="t-upload">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14v-2H5v2Zm4-4h6v-6h4l-7-7-7 7h4v6Z"/></svg>
+            <span id="t-upload-label">Upload template</span>
+          </button>
+          <button class="btn btn-ghost" type="button" id="t-use-cap" hidden></button>
+          <button class="btn btn-ghost" type="button" id="t-remove" hidden>Remove</button>
+        </div>
+      </div>
+
+      <div class="parts-summary" id="parts-summary" hidden>
+        <span id="parts-count"></span>
+        <div class="actions">
+          <button class="btn btn-ghost" type="button" id="zip-csv">Download all as CSV (.zip)</button>
+          <button class="btn btn-primary" type="button" id="zip-xlsx">Download all for Excel (.zip)</button>
+        </div>
+      </div>
+
+      <p class="sub">Click or tap any cell to edit it. Changes save automatically.</p>
+      <div id="sheet-parts"></div>
+      <p class="empty" id="sheet-empty" hidden>No trips yet. Log your first trip from the Daily Log tab.</p>
+    </div>
+  </section>
+  <section id="view-dash" hidden>
+    <div class="dash-head">
+      <div>
+        <h2>Reimbursement dashboard</h2>
+        <p class="sub" id="d-sub">Weekly reimbursements at your rate per mile.</p>
+      </div>
+      <div class="field">
+        <label for="d-range">Time range</label>
+        <select id="d-range">
+          <option value="4">Last 4 weeks</option>
+          <option value="12" selected>Last 12 weeks</option>
+          <option value="26">Last 26 weeks</option>
+          <option value="52">Last 52 weeks</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="card rate-card">
+      <form id="rate-form" class="rate-form" novalidate>
+        <div class="field">
+          <label for="r-rate">Reimbursement rate (per mile)</label>
+          <div class="money-input"><span>$</span><input id="r-rate" type="number" inputmode="decimal" min="0.01" max="10" step="0.001" placeholder="0.700" required></div>
+        </div>
+        <div class="field">
+          <label for="r-date">Effective from</label>
+          <input id="r-date" type="date" required>
+        </div>
+        <button class="btn btn-primary" type="submit">Save rate</button>
+      </form>
+      <p class="hint" id="r-help">A new rate applies to trips on or after its date, so past reimbursements keep the rate they were earned at.</p>
+      <ul class="rate-list" id="r-list"></ul>
+    </div>
+
+    <div id="d-norate" class="card notice" hidden>Set your reimbursement rate above to see dollar amounts.</div>
+
+    <div id="d-body">
+      <div class="kpis">
+        <div class="kpi kpi-hero"><span class="kpi-label">Average weekly reimbursement</span><strong id="k-avg">–</strong><span class="kpi-foot" id="k-avg-foot"></span></div>
+        <div class="kpi"><span class="kpi-label">This week so far</span><strong id="k-week">–</strong><span class="kpi-foot" id="k-week-foot"></span></div>
+        <div class="kpi"><span class="kpi-label">Average weekly miles</span><strong id="k-miles">–</strong><span class="kpi-foot" id="k-miles-foot"></span></div>
+        <div class="kpi"><span class="kpi-label">Total in range</span><strong id="k-total">–</strong><span class="kpi-foot" id="k-total-foot"></span></div>
+      </div>
+
+      <div class="card chart-card">
+        <h3>Weekly reimbursements</h3>
+        <p class="chart-sub">Each bar is one week (Mon–Sun). The dashed line is your weekly average.</p>
+        <div class="chart" id="c-weekly"></div>
+        <details class="data-table"><summary>Show as table</summary><div id="t-weekly"></div></details>
+      </div>
+
+      <div class="chart-grid">
+        <div class="card chart-card">
+          <h3>Average weekly reimbursement by program</h3>
+          <p class="chart-sub">What each program costs in a typical week, and its share of the total.</p>
+          <div class="chart" id="c-program"></div>
+        </div>
+        <div class="card chart-card">
+          <h3>Reimbursement by day of week</h3>
+          <p class="chart-sub">Share of the total reimbursed on each weekday.</p>
+          <div class="chart" id="c-weekday"></div>
+        </div>
+      </div>
+
+      <div class="card chart-card">
+        <h3>Top clients</h3>
+        <p class="chart-sub">Clients (end locations) that account for the most reimbursement in this range.</p>
+        <div class="chart" id="c-clients"></div>
+      </div>
+    </div>
+    <div class="chart-tip" id="chart-tip" role="tooltip" hidden></div>
+  </section>
+</main>
+<script src="/js/common.js"></script>
+<script src="/js/webauthn.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/dashboard.js"></script>
+</body>
+</html>
