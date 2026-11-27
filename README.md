@@ -28,6 +28,7 @@ Book notes are part of the website itself, so there's nothing to copy, paste or 
 
 - `notes/index.json` lists the books that have notes (matched by ISBN, or by title and author) and their chapters.
 - Each chapter's notes are a Markdown file, for example `notes/kurose-ross-8e/ch3.md`.
+- Each chapter also has study tools in a matching `.study.json` file (for example `notes/kurose-ross-8e/ch3.study.json`): **Key Concepts**, **Flashcards** (flip, shuffle) and a **Practice Quiz** (multiple choice with explanations and a score). They appear at the top of the chapter, above the full notes.
 - To add notes for another book, ask Claude in a Claude Code session for this repository: "Add notes for <book title>".
 
 Notes currently included: *Computer Networking: A Top-Down Approach*, 8th edition (Kurose & Ross), chapters 1–8.

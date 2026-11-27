@@ -1,0 +1,51 @@
+{
+  "keyConcepts": [
+    { "title": "The Internet is a network of networks", "text": "End systems (hosts) connect through access ISPs, which connect to regional ISPs and tier-1 ISPs. IXPs, peering and content provider networks tie them together." },
+    { "title": "Protocols define communication", "text": "A protocol sets the format and order of messages exchanged and the actions taken when a message is sent or received. TCP and IP are the Internet's core protocols." },
+    { "title": "Edge vs. core", "text": "The **edge** is hosts and access networks (DSL, cable, fiber, WiFi, cellular). The **core** is the mesh of routers and links that moves packets between them." },
+    { "title": "Packet switching vs. circuit switching", "text": "Packet switching shares link capacity on demand and suits bursty traffic. Circuit switching reserves capacity end-to-end (FDM or TDM), which wastes it when users are idle." },
+    { "title": "Store-and-forward", "text": "A router must receive a whole packet before forwarding it. Over N links of rate R, one packet of L bits takes **N·L/R** seconds." },
+    { "title": "The four delays", "text": "Nodal delay = processing + queuing + transmission (**L/R**, depends on packet size) + propagation (**d/s**, depends on distance)." },
+    { "title": "Traffic intensity and throughput", "text": "Keep traffic intensity **La/R** below 1, or queues grow without limit. End-to-end throughput is set by the slowest (bottleneck) link: **min(R1, …, RN)**." },
+    { "title": "Five-layer stack and encapsulation", "text": "Application (messages), transport (segments), network (datagrams), link (frames), physical (bits). Each layer adds its own header as data goes down the stack." },
+    { "title": "Networks under attack", "text": "Malware and botnets, DoS/DDoS attacks (vulnerability, bandwidth flooding, connection flooding), packet sniffing and IP spoofing." }
+  ],
+  "flashcards": [
+    { "front": "What is a host (end system)?", "back": "A device at the edge of the network that runs applications, such as a laptop, phone or server." },
+    { "front": "What is a protocol?", "back": "Rules defining the format and order of messages exchanged between entities, and the actions taken on sending or receiving a message." },
+    { "front": "What is an access network?", "back": "The network that physically connects an end system to the first (edge) router on its path, e.g. DSL, cable, FTTH, WiFi or cellular." },
+    { "front": "Transmission delay formula", "back": "**L/R**: packet length (bits) divided by link rate (bits/sec). Depends on packet size, not distance." },
+    { "front": "Propagation delay formula", "back": "**d/s**: link length divided by propagation speed (about 2–3×10^8 m/s). Depends on distance, not packet size." },
+    { "front": "What causes queuing delay?", "back": "Packets arriving at a router faster than the outgoing link can send them, so they wait in the output buffer." },
+    { "front": "Traffic intensity", "back": "**La/R** (arrival rate × packet size ÷ link rate). If it's above 1, the queue grows without bound." },
+    { "front": "When does packet loss happen?", "back": "When a packet arrives at a router whose buffer (queue) is already full, so it gets dropped." },
+    { "front": "Bottleneck link", "back": "The slowest link on a path. It limits end-to-end throughput: throughput = min(R1, R2, …, RN)." },
+    { "front": "Store-and-forward delay over N links", "back": "**N·L/R** for one packet (ignoring other delays). For P packets: (N + P − 1)·L/R." },
+    { "front": "FDM vs. TDM", "back": "FDM gives each circuit its own frequency band all the time. TDM gives each circuit a fixed time slot in every frame." },
+    { "front": "The five Internet layers (top to bottom)", "back": "Application, Transport, Network, Link, Physical." },
+    { "front": "Packet names at each layer", "back": "Message (application), segment (transport), datagram (network), frame (link), bits (physical)." },
+    { "front": "What is encapsulation?", "back": "Each layer adds its own header to the data from the layer above, e.g. a segment becomes the payload of a datagram." },
+    { "front": "Which layers do routers implement?", "back": "Layers 1–3 (physical, link, network). Link-layer switches implement layers 1–2. Hosts implement all five." },
+    { "front": "What is an IXP?", "back": "An Internet exchange point: a meeting point where many ISPs peer (exchange traffic) with each other." },
+    { "front": "Virus vs. worm", "back": "A virus needs user interaction to spread (e.g. opening an attachment). A worm spreads with no user interaction." },
+    { "front": "What is a DDoS attack?", "back": "A distributed denial-of-service attack: many sources (often a botnet) flood a target so legitimate users can't use it." },
+    { "front": "What is IP spoofing?", "back": "Sending packets with a false source IP address. Defended against with end-point authentication." },
+    { "front": "Who created the Web, and when did ARPAnet switch to TCP/IP?", "back": "Tim Berners-Lee created the World Wide Web at CERN. ARPAnet switched to TCP/IP on January 1, 1983." }
+  ],
+  "quiz": [
+    { "q": "Which delay depends on the distance between two routers?", "options": ["Propagation delay", "Transmission delay", "Processing delay", "Queuing delay"], "answer": 0, "explain": "Propagation delay is d/s: the link's length divided by the signal's speed. Transmission delay (L/R) depends on packet size, not distance." },
+    { "q": "A 1,000-bit packet is sent on a 1 Mbps link. What is the transmission delay?", "options": ["1 ms", "1 µs", "1 s", "10 ms"], "answer": 0, "explain": "L/R = 1,000 bits ÷ 1,000,000 bits/s = 0.001 s = 1 ms." },
+    { "q": "A packet of L bits crosses 3 links, each of rate R, using store-and-forward. Ignoring other delays, how long does it take?", "options": ["3L/R", "L/R", "L/(3R)", "2L/R"], "answer": 0, "explain": "Each of the N = 3 links must receive the whole packet before forwarding it, so the delay is N·L/R = 3L/R." },
+    { "q": "What happens when traffic intensity La/R is greater than 1?", "options": ["The queue grows without bound and delay approaches infinity", "Queuing delay becomes zero", "Propagation delay increases", "The link automatically speeds up"], "answer": 0, "explain": "Bits arrive faster than they can be sent, so the queue keeps growing. Systems must be designed so traffic intensity stays below 1." },
+    { "q": "A path has links of 10 Mbps, 2 Mbps and 100 Mbps. What is the end-to-end throughput?", "options": ["2 Mbps", "10 Mbps", "100 Mbps", "112 Mbps"], "answer": 0, "explain": "Throughput is limited by the bottleneck (slowest) link: min(10, 2, 100) = 2 Mbps." },
+    { "q": "Which layer moves datagrams from one host to another across the network?", "options": ["Network layer", "Transport layer", "Link layer", "Application layer"], "answer": 0, "explain": "The network layer (IP) moves datagrams host to host. The transport layer works process to process; the link layer works one hop at a time." },
+    { "q": "What is a packet called at the transport layer?", "options": ["Segment", "Frame", "Datagram", "Message"], "answer": 0, "explain": "Messages (application) → segments (transport) → datagrams (network) → frames (link)." },
+    { "q": "Why is packet switching better than circuit switching for bursty traffic?", "options": ["It shares link capacity on demand, so more users can share a link", "It guarantees a constant rate to every user", "It never loses packets", "It reserves resources before sending"], "answer": 0, "explain": "Users are rarely all active at once, so sharing capacity on demand supports many more users. Circuit switching wastes reserved capacity during silent periods." },
+    { "q": "Which access technology is a shared broadcast medium, so neighbors can slow each other down?", "options": ["Cable (HFC)", "DSL", "FTTH with a dedicated fiber", "Dial-up"], "answer": 0, "explain": "In cable internet, homes in a neighborhood share the same downstream channel, so speed can drop when many people are online." },
+    { "q": "Which layers does a typical router implement?", "options": ["Physical, link and network", "All five layers", "Only physical and link", "Network and transport"], "answer": 0, "explain": "Routers work up to layer 3 (network). Link-layer switches implement layers 1–2, and hosts implement all five." },
+    { "q": "What does a packet sniffer do?", "options": ["Passively records copies of packets passing by", "Floods a server with traffic", "Sends packets with a fake source address", "Infects hosts without user interaction"], "answer": 0, "explain": "Sniffers passively capture traffic, which makes them hard to detect. Encryption is the main defense." },
+    { "q": "Which statement about the OSI model is true?", "options": ["It has seven layers, including presentation and session", "It has five layers, like the Internet stack", "It has no transport layer", "It was replaced by HTTP"], "answer": 0, "explain": "OSI adds presentation and session layers. The Internet stack leaves those functions to applications." },
+    { "q": "What is the main purpose of an IXP?", "options": ["A meeting point where multiple ISPs peer with each other", "A device that converts DSL to cable", "A server that stores web pages", "A protocol that encrypts traffic"], "answer": 0, "explain": "Internet exchange points let ISPs connect and exchange traffic directly (peering) instead of paying a provider." },
+    { "q": "Which type of malware spreads without any user interaction?", "options": ["Worm", "Virus", "Spoofer", "Sniffer"], "answer": 0, "explain": "Worms exploit vulnerable network apps to spread on their own; viruses need a user to do something, like open an attachment." }
+  ]
+}

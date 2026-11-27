@@ -146,6 +146,154 @@
     return { html: `<section class="note-section intro">${html.join("")}</section>`, sections };
   }
 
+  // ---------- Study tools: key concepts, flashcards, practice quiz ----------
+  // Each chapter can have a "<chapter>.study.json" file next to its notes.
+
+  const quizScores = load("cac.quizScores", {}); // { "<book id>:<chapter>": { score, total, date } }
+
+  function shuffled(list) {
+    const a = [...list];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function keyConceptsHtml(study) {
+    return `<section class="study-block" id="key-concepts">
+      <h3 class="study-title">Key Concepts</h3>
+      <div class="concept-grid">
+        ${study.keyConcepts.map((k, i) => `<article class="concept-card">
+          <span class="concept-num">${i + 1}</span>
+          <div><h4>${inline(k.title)}</h4><p>${inline(k.text)}</p></div>
+        </article>`).join("")}
+      </div>
+    </section>`;
+  }
+
+  // Flashcards: one card at a time; click (or Space) to flip, arrows to move.
+  function setupFlashcards(root, cards) {
+    let order = cards.map((_, i) => i);
+    let pos = 0;
+    let flipped = false;
+    const card = root.querySelector(".flashcard");
+    const show = () => {
+      const c = cards[order[pos]];
+      flipped = false;
+      card.classList.remove("flipped");
+      root.querySelector(".fc-front").innerHTML = inline(c.front);
+      root.querySelector(".fc-back").innerHTML = inline(c.back);
+      root.querySelector(".fc-count").textContent = `${pos + 1} / ${cards.length}`;
+      root.querySelector(".fc-prev").disabled = pos === 0;
+      root.querySelector(".fc-next").disabled = pos === cards.length - 1;
+      card.setAttribute("aria-label", `Card ${pos + 1}: ${c.front}. Press to show the answer.`);
+    };
+    const flip = () => {
+      flipped = !flipped;
+      card.classList.toggle("flipped", flipped);
+    };
+    card.onclick = flip;
+    card.onkeydown = (ev) => {
+      if (ev.key === " " || ev.key === "Enter") { ev.preventDefault(); flip(); }
+      if (ev.key === "ArrowRight" && pos < cards.length - 1) { pos++; show(); }
+      if (ev.key === "ArrowLeft" && pos > 0) { pos--; show(); }
+    };
+    root.querySelector(".fc-prev").onclick = () => { if (pos > 0) { pos--; show(); } };
+    root.querySelector(".fc-next").onclick = () => { if (pos < cards.length - 1) { pos++; show(); } };
+    root.querySelector(".fc-shuffle").onclick = () => { order = shuffled(order); pos = 0; show(); };
+    show();
+  }
+
+  function flashcardsHtml(study) {
+    return `<section class="study-block" id="flashcards">
+      <h3 class="study-title">Flashcards</h3>
+      <p class="study-sub">Click the card (or press Space) to flip it. Use the arrows to move between cards.</p>
+      <div class="fc-wrap">
+        <div class="flashcard" tabindex="0" role="button">
+          <div class="fc-face fc-front"></div>
+          <div class="fc-face fc-back"></div>
+        </div>
+        <div class="fc-controls">
+          <button class="btn btn-ghost fc-prev" type="button" aria-label="Previous card">&larr;</button>
+          <span class="fc-count"></span>
+          <button class="btn btn-ghost fc-next" type="button" aria-label="Next card">&rarr;</button>
+          <button class="link-btn fc-shuffle" type="button">Shuffle</button>
+        </div>
+      </div>
+    </section>`;
+  }
+
+  // Practice quiz: answer each question to see if you're right and why; score at the end.
+  function setupQuiz(root, questions, scoreKey) {
+    const render = () => {
+      const qs = shuffled(questions).map((q) => {
+        const opts = shuffled(q.options.map((text, i) => ({ text, correct: i === q.answer })));
+        return { ...q, opts };
+      });
+      let answered = 0, correct = 0;
+      const best = quizScores[scoreKey];
+      root.querySelector(".quiz-list").innerHTML = qs.map((q, qi) => `
+        <li class="quiz-q" data-q="${qi}">
+          <p class="quiz-question"><span>${qi + 1}.</span> ${inline(q.q)}</p>
+          <div class="quiz-options">
+            ${q.opts.map((o, oi) => `<button class="quiz-opt" type="button" data-o="${oi}">
+              <span class="quiz-letter">${"ABCD"[oi]}</span><span>${inline(o.text)}</span></button>`).join("")}
+          </div>
+          <p class="quiz-feedback" hidden></p>
+        </li>`).join("");
+      const scoreEl = root.querySelector(".quiz-score");
+      const updateScore = () => {
+        scoreEl.innerHTML = answered < qs.length
+          ? `Answered ${answered} of ${qs.length} · ${correct} correct${best ? ` · Last time: ${best.score}/${best.total}` : ""}`
+          : `<strong>Score: ${correct} / ${qs.length} (${Math.round((correct / qs.length) * 100)}%)</strong> · ${
+              correct === qs.length ? "Perfect!" : correct / qs.length >= 0.8 ? "Great job!" : correct / qs.length >= 0.6 ? "Good. Review the ones you missed." : "Keep studying and try again."}`;
+      };
+      updateScore();
+      root.querySelectorAll(".quiz-q").forEach((li) => {
+        const q = qs[li.dataset.q];
+        li.querySelectorAll(".quiz-opt").forEach((btn) => {
+          btn.onclick = () => {
+            const pick = q.opts[btn.dataset.o];
+            li.querySelectorAll(".quiz-opt").forEach((b) => {
+              b.disabled = true;
+              if (q.opts[b.dataset.o].correct) b.classList.add("right");
+            });
+            if (!pick.correct) btn.classList.add("wrong");
+            const fb = li.querySelector(".quiz-feedback");
+            fb.hidden = false;
+            fb.className = `quiz-feedback ${pick.correct ? "ok" : "no"}`;
+            fb.innerHTML = `<strong>${pick.correct ? "Correct!" : "Not quite."}</strong> ${inline(q.explain)}`;
+            answered++;
+            if (pick.correct) correct++;
+            if (answered === qs.length) {
+              quizScores[scoreKey] = { score: correct, total: qs.length, date: new Date().toISOString() };
+              save("cac.quizScores", quizScores);
+            }
+            updateScore();
+          };
+        });
+      });
+    };
+    root.querySelector(".quiz-retake").onclick = () => {
+      render();
+      root.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    render();
+  }
+
+  function quizHtml(study) {
+    return `<section class="study-block" id="quiz">
+      <h3 class="study-title">Practice Quiz</h3>
+      <p class="study-sub">${study.quiz.length} multiple-choice questions. Pick an answer to see if you're right and why. Questions and answers are shuffled each time.</p>
+      <ol class="quiz-list"></ol>
+      <div class="quiz-bottom">
+        <p class="quiz-score"></p>
+        <button class="btn quiz-retake" type="button">Retake quiz</button>
+      </div>
+    </section>`;
+  }
+
   let entry = null;
 
   async function showChapter(i, scroll) {
@@ -155,14 +303,27 @@
     history.replaceState(null, "", `#chapter-${ch.number}`);
     $("notes").innerHTML = `<p class="muted">Loading Chapter ${esc(ch.number)}…</p>`;
     try {
-      const res = await fetch(ch.file);
+      const studyFile = ch.file.replace(/\.md$/, ".study.json");
+      const [res, studyRes] = await Promise.all([fetch(ch.file), fetch(studyFile).catch(() => null)]);
       if (!res.ok) throw new Error();
       const { html, sections } = renderMarkdown(await res.text());
+      let study = null;
+      try {
+        if (studyRes && studyRes.ok) study = await studyRes.json();
+      } catch {
+        study = null; // notes still work without the study tools
+      }
+      const parts = study ? [
+        ["key-concepts", "Key Concepts"], ["flashcards", "Flashcards"], ["quiz", "Practice Quiz"], ["full-notes", "Full Notes"],
+      ] : [];
       $("notes").innerHTML = `
         <header class="chapter-head">
           <span class="chapter-num">${esc(ch.number)}</span>
           <div><p class="eyebrow">Chapter ${esc(ch.number)}</p><h3>${esc(ch.title)}</h3></div>
         </header>
+        ${parts.length ? `<nav class="jump-bar" aria-label="Jump to">${parts.map(([id, label]) => `<a href="#${id}">${label}</a>`).join("")}</nav>` : ""}
+        ${study ? keyConceptsHtml(study) + flashcardsHtml(study) + quizHtml(study) : ""}
+        ${study ? `<h3 class="study-title full-notes-title" id="full-notes">Full Notes</h3>` : ""}
         ${html}
         <div class="chapter-nav">
           ${i > 0 ? `<button class="btn btn-ghost" data-go="${i - 1}">&larr; Chapter ${esc(entry.chapters[i - 1].number)}</button>` : "<span></span>"}
@@ -170,7 +331,16 @@
         </div>
         <p class="notes-foot">${esc(entry.source)}</p>`;
       $("notes").querySelectorAll("[data-go]").forEach((b) => (b.onclick = () => showChapter(Number(b.dataset.go), true)));
-      $("toc").innerHTML = sections
+      if (study) {
+        setupFlashcards($("flashcards"), study.flashcards);
+        setupQuiz($("quiz"), study.quiz, `${entry.id}:${ch.number}`);
+      }
+      $("notes").querySelectorAll(".jump-bar a").forEach((a) => (a.onclick = (ev) => {
+        ev.preventDefault();
+        document.getElementById(a.getAttribute("href").slice(1)).scrollIntoView({ behavior: "smooth", block: "start" });
+      }));
+      const studyLinks = parts.slice(0, 3).map(([id, label]) => `<li><a href="#${id}"><span>★</span>${label}</a></li>`).join("");
+      $("toc").innerHTML = studyLinks + sections
         .map((s) => `<li><a href="#${s.id}"><span>${esc(s.number)}</span>${esc(s.title)}</a></li>`)
         .join("");
       $("toc").querySelectorAll("a").forEach((a) => (a.onclick = (ev) => {
@@ -210,6 +380,12 @@
       .join("");
     $("chapterButtons").querySelectorAll(".ch-btn").forEach((b) => (b.onclick = () => showChapter(Number(b.dataset.i), false)));
 
+    // Typing or pasting a #chapter-N address switches to that chapter.
+    window.addEventListener("hashchange", () => {
+      const n = (location.hash.match(/^#chapter-(.+)$/) || [])[1];
+      const j = entry.chapters.findIndex((c) => c.number === n);
+      if (j >= 0) showChapter(j, true);
+    });
     const fromHash = (location.hash.match(/^#chapter-(.+)$/) || [])[1];
     const i = entry.chapters.findIndex((c) => c.number === fromHash);
     if (i >= 0) showChapter(i, false);
