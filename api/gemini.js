@@ -99,22 +99,27 @@ All 4 options must be different and plausible.`;
     case "chapter":
       return `${head}
 
-Write condensed study material for ${ch}. Output exactly these parts, in this order, and nothing else:
+Write study notes for ${ch}. A student will use them instead of rereading the chapter, so they must be specific and explain things, not just name topics. Output exactly these parts, in this order, and nothing else:
 
-INTRO: one paragraph (2-4 sentences, on a single line) about what the chapter covers.
+INTRO: one paragraph (3-4 sentences, on a single line) about what the chapter covers and why it matters.
 
-Then the notes: one "## " heading per main section of the chapter, starting with the section number (e.g. "## ${chapter.number}.1 Section title"; use the book's real section titles if you know them, usually 5-8 sections). Under each heading, the key points as "- " bullets (one level of nested "  - " bullets allowed), with **bold** key terms and \`code\` for formulas. About 900-1,400 words of notes in total.
+Then the notes: one "## " heading per main section of the chapter, starting with the section number (e.g. "## ${chapter.number}.1 Section title"; use the book's real section titles if you know them, usually 5-8 sections). For each section:
+- Start with 1-2 sentences saying what the section is about.
+- Then "- " bullets for every important idea. Each bullet: the **key term or idea in bold**, followed by 1-3 sentences explaining what it means, how it works and why it matters. Never write a bullet that only names a topic.
+- Include concrete examples, definitions, formulas (in \`code\`), numbers, and step-by-step processes (as "1. " numbered lists) wherever the topic has them.
+- Use "### " sub-headings to break up longer sections, and one level of nested "  - " bullets for details.
+About 1,800-2,500 words of notes in total.
 
 ===CONCEPTS===
-8-10 lines, most important first:
-CONCEPT: Short title | 1-2 sentences explaining it
+10-12 lines, most important first:
+CONCEPT: Short title | 2-3 sentences explaining it, with an example if it helps
 
 ===CARDS===
-20 lines:
-CARD: question or term | short answer or definition
+25 lines:
+CARD: question or term | clear answer or definition (one or two sentences)
 
 ===QUIZ===
-10 questions, each in this format, with a blank line between questions:
+12 questions that test understanding (not just recall), each in this format, with a blank line between questions:
 Q: the question
 A) option
 B) option
