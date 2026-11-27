@@ -571,6 +571,7 @@ if (typeof document !== "undefined") {
       setupMessage("");
     } catch (err) {
       const showingData = !$("app").classList.contains("hidden") && state.events.length;
+      if (showingData && quiet && err.noDefault) return; // nothing saved on the website: just keep this copy
       if (showingData) {
         setStatus(`Couldn't refresh just now: ${err.message.split("\n")[0].replace(/\.$/, "")}. Showing your last saved copy.`);
         return;
