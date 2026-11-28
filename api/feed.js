@@ -3,8 +3,26 @@
 // sends the link here (POST /api/feed) and this function fetches it.
 //
 // The link is sent in the request body, not the URL, so it doesn't end up in logs.
-// If the page sends no link, the one saved in Vercel's environment settings
-// (CANVAS_FEED_URL) is used, so the site works on any device without pasting it.
+// If the page sends no link, the website uses a saved one, so you only paste it once:
+//   1. CANVAS_FEED_URL in Vercel's environment settings, if you set it, or
+//   2. the last link that worked, kept in the site's database (Upstash Redis).
+// The saved link is only ever used here on the server; it is never sent back to a page.
+
+const { store, redis, sameSite } = require("./_redis");
+
+const SAVED = "cac:feedUrl";
+
+async function savedLink() {
+  if (process.env.CANVAS_FEED_URL) return process.env.CANVAS_FEED_URL;
+  const db = store();
+  if (!db) return "";
+  try {
+    const [url] = await redis(db, [["GET", SAVED]]);
+    return url || "";
+  } catch {
+    return "";
+  }
+}
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
@@ -12,7 +30,11 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: "Use POST" });
   }
 
-  let url = (req.body && req.body.url) || process.env.CANVAS_FEED_URL || "";
+  res.setHeader("Cache-Control", "no-store");
+  if (!sameSite(req)) return res.status(403).json({ error: "Not allowed." });
+
+  const pasted = (req.body && req.body.url) || "";
+  let url = pasted || (await savedLink());
   if (!url) {
     return res.status(404).json({ error: "No feed link saved on the website yet.", noDefault: true });
   }
@@ -46,8 +68,16 @@ module.exports = async function handler(req, res) {
     if (!text.includes("BEGIN:VCALENDAR")) {
       return res.status(502).json({ error: "Canvas didn't send back a calendar. Check that you copied the whole link." });
     }
+    // A new link that works: remember it for every device and browser.
+    const db = store();
+    if (pasted && db) {
+      try {
+        await redis(db, [["SET", SAVED, target.toString()]]);
+      } catch {
+        /* still show the calendar */
+      }
+    }
     res.setHeader("Content-Type", "text/calendar; charset=utf-8");
-    res.setHeader("Cache-Control", "no-store");
     return res.status(200).send(text);
   } catch {
     return res.status(502).json({ error: "Couldn't reach Canvas. Try again in a minute." });

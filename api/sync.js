@@ -3,28 +3,11 @@
 // (Vercel → Storage → Upstash for Redis). Vercel adds its URL and token as
 // environment variables; both the KV_* and UPSTASH_* names are supported.
 
+const { store, redis, sameSite } = require("./_redis");
+
 const DATA = "cac:data"; // field -> JSON value
 const META = "cac:meta"; // field -> last change time (ms)
 const FIELD = /^(books|done|estimates|quizScores|gen:.{1,400})$/;
-
-function store() {
-  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-  return url && token ? { url: url.replace(/\/$/, ""), token } : null;
-}
-
-async function redis(db, commands) {
-  const res = await fetch(`${db.url}/pipeline`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${db.token}`, "Content-Type": "application/json" },
-    body: JSON.stringify(commands),
-  });
-  if (!res.ok) throw new Error(`Database answered ${res.status}`);
-  const out = await res.json();
-  const bad = out.find((r) => r.error);
-  if (bad) throw new Error(bad.error);
-  return out.map((r) => r.result);
-}
 
 const pairs = (list) => {
   const o = {};
@@ -39,12 +22,7 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: "Use POST" });
   }
   // Only this website's own pages may use it.
-  const origin = req.headers.origin;
-  try {
-    if (!origin || new URL(origin).host !== req.headers.host) return res.status(403).json({ error: "Not allowed." });
-  } catch {
-    return res.status(403).json({ error: "Not allowed." });
-  }
+  if (!sameSite(req)) return res.status(403).json({ error: "Not allowed." });
   const db = store();
   if (!db) return res.status(503).json({ error: "Sync isn't set up yet.", setup: true });
 

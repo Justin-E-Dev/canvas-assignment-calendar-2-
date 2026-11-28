@@ -653,4 +653,17 @@ if (typeof document !== "undefined") {
   // Refresh in the background: from this browser's saved link, or else the one
   // saved on the website (CANVAS_FEED_URL), so a new device needs no pasting.
   loadFromUrl(savedUrl, { quiet: true });
+  let lastLoad = Date.now();
+
+  // Keep it up to date on its own: whenever you come back to this tab (for example
+  // after checking Canvas), and every 15 minutes while it's open.
+  function autoRefresh() {
+    if (document.visibilityState !== "visible" || Date.now() - lastLoad < 2 * 60 * 1000) return;
+    if (!$("setup").classList.contains("hidden") && !state.events.length) return; // not set up yet
+    lastLoad = Date.now();
+    loadFromUrl(load(STORE.feedUrl, ""), { quiet: true });
+  }
+  document.addEventListener("visibilitychange", autoRefresh);
+  window.addEventListener("focus", autoRefresh);
+  setInterval(autoRefresh, 15 * 60 * 1000);
 }

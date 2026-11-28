@@ -16,9 +16,11 @@ No accounts or API tokens needed.
 
 1. In Canvas, open **Calendar** (far-left menu) and click **Calendar Feed** (right side, near the bottom).
 2. Copy the whole link. It's long and ends in `.ics`.
-3. Open the website, paste the link and click **Load**. Click **Refresh** any time to get the latest assignments.
+3. Open the website, paste the link and click **Load**. You only do this once.
 
-Keep the feed link private. Anyone who has it can see your calendar. The website saves it only in your own browser and never stores it on the server or in this code.
+The site then keeps itself up to date: it reloads your assignments every time you open it or come back to the tab (for example after checking Canvas), and every 15 minutes while it's open. **Refresh** still works any time.
+
+Keep the feed link private. Anyone who has it can see your calendar. The website remembers it in your browser and, if the sync database below is set up, in that database too, so every device and browser loads your calendar without pasting it again (even if the browser clears its storage). It's only used on the server to download the feed; it's never sent back to a page and never stored in this code.
 
 You can also download the `.ics` file from Canvas and use **Load .ics file** instead.
 
@@ -34,7 +36,7 @@ Book covers are real cover images looked up on Google Books (then Open Library) 
 
 ## Use it on any device (phone, other computers)
 
-Save your Canvas feed link in Vercel once, and every device loads your calendar without pasting it:
+With the sync database set up (see below), the link you paste once is remembered for every device. Or save it in Vercel yourself:
 Vercel → your project → **Settings → Environment Variables** → add `CANVAS_FEED_URL` with your feed link (tick Production) → **Redeploy**.
 The link stays private: it lives only in Vercel, not in this code. (Anyone who opens your site can see your assignments, so keep the site's address to yourself.)
 
@@ -63,4 +65,4 @@ computer and phone through a free Upstash Redis database (`api/sync.js`, `sync.j
 Set it up once in Vercel: **Storage → Create Database → Upstash for Redis (free)**,
 connect it to this project, then redeploy. Vercel adds the database's URL and token
 as environment variables automatically. Without it, everything still works, but
-each device keeps its own copy. The Canvas feed link is never synced.
+each device keeps its own copy. The Canvas feed link is kept in the same database (never sent back to a page), so you only paste it once.
