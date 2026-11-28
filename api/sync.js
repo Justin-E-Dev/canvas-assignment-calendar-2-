@@ -7,7 +7,7 @@ const { store, redis, sameSite } = require("./_redis");
 
 const DATA = "cac:data"; // field -> JSON value
 const META = "cac:meta"; // field -> last change time (ms)
-const FIELD = /^(books|done|estimates|quizScores|gen:.{1,400})$/;
+const FIELD = /^(books|booksRemoved|done|estimates|quizScores|gen:.{1,400})$/;
 
 const pairs = (list) => {
   const o = {};

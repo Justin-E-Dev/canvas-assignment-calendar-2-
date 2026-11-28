@@ -1,6 +1,8 @@
 // Learning Center: a card for every class where you can add its books.
 // Books are found by ISBN or by searching Open Library (with Google Books as a
-// backup). Your book list is saved only in this browser.
+// backup). Your book list is saved in this browser and synced to your other
+// devices by sync.js (removed books are remembered in cac.booksRemoved so the
+// sync knows a missing book was removed, not just never seen).
 
 const LearningCenter = (() => {
   const BOOKS_KEY = "cac.books";
@@ -15,14 +17,46 @@ const LearningCenter = (() => {
       return {};
     }
   }
-  function saveBooks() {
+  // Saves to browser storage. If it's full (Gemini notes can fill it), make room
+  // by dropping things that are easy to get back, then try again.
+  function store(key, value) {
+    const text = JSON.stringify(value);
     try {
-      localStorage.setItem(BOOKS_KEY, JSON.stringify(books));
+      localStorage.setItem(key, text);
+      return true;
     } catch {
-      /* storage full or unavailable */
+      for (const spare of ["cac.coverCache", "cac.lastIcs"]) {
+        try {
+          localStorage.removeItem(spare);
+          localStorage.setItem(key, text);
+          return true;
+        } catch {
+          /* still full */
+        }
+      }
+      return false;
     }
   }
-  let books = loadBooks(); // { "BIO 101": [ {title, authors, year, isbn, cover} ] }
+  function saveBooks() {
+    if (!store(BOOKS_KEY, books)) {
+      alert("Your browser's storage is full, so that book couldn't be saved. Removing some generated book notes will free up space.");
+    }
+  }
+  const bookId = (b) => b.isbn || b.title;
+  // Remember a removal (by class and book) so other devices drop it too.
+  function noteRemoved(course, b) {
+    let removed = {};
+    try {
+      removed = JSON.parse(localStorage.getItem("cac.booksRemoved")) || {};
+    } catch {
+      /* start fresh */
+    }
+    removed[`${course}|${bookId(b)}`] = Date.now();
+    store("cac.booksRemoved", removed);
+  }
+  // Always start from what's saved, so a change synced in from another device
+  // (or another tab) isn't overwritten by an old copy.
+  let books = loadBooks(); // { "BIO 101": [ {title, authors, year, isbn, cover, addedAt} ] }
 
   // ---------- ISBN ----------
   function cleanIsbn(text) {
@@ -187,6 +221,7 @@ const LearningCenter = (() => {
   const sameBook = (a, b) => (a.isbn && a.isbn === b.isbn) || (a.title === b.title && a.year === b.year);
 
   function renderShelf(card, course) {
+    books = loadBooks();
     const shelf = card.querySelector(".shelf");
     const list = books[course] || [];
     if (!list.length) {
@@ -206,8 +241,12 @@ const LearningCenter = (() => {
       remove.replaceWith(actions);
       actions.append(open, remove);
       remove.onclick = () => {
-        books[course].splice(i, 1);
-        if (!books[course].length) delete books[course];
+        books = loadBooks();
+        const list = books[course] || [];
+        const at = list.findIndex((x) => bookId(x) === bookId(b));
+        if (at >= 0) list.splice(at, 1);
+        if (!list.length) delete books[course];
+        noteRemoved(course, b);
         saveBooks();
         renderShelf(card, course);
       };
@@ -229,7 +268,9 @@ const LearningCenter = (() => {
       const btn = el.querySelector("button");
       if (btn.textContent === "Added") btn.disabled = true;
       btn.onclick = () => {
-        (books[course] ||= []).push(results[i]);
+        books = loadBooks();
+        const list = (books[course] ||= []);
+        if (!list.some((x) => sameBook(x, results[i]))) list.push({ ...results[i], addedAt: Date.now() });
         saveBooks();
         btn.textContent = "Added";
         btn.classList.add("btn-ghost");
@@ -268,7 +309,12 @@ const LearningCenter = (() => {
     courseColors = { ...colors, [PERSONAL]: PERSONAL_COLOR };
     const list = document.getElementById("classList");
     list.innerHTML = "";
-    const all = [...courses.filter((c) => c !== PERSONAL), PERSONAL];
+    // Also show classes that have books but nothing in the Canvas feed right now
+    // (no assignments due, or a past class), so those books never disappear.
+    books = loadBooks();
+    const extra = Object.keys(books).filter((c) => c !== PERSONAL && !courses.includes(c) && (books[c] || []).length);
+    for (const c of extra) courseColors[c] ||= "#8a94a6";
+    const all = [...courses.filter((c) => c !== PERSONAL), ...extra.sort(), PERSONAL];
     for (const course of all) {
       const personal = course === PERSONAL;
       const card = document.createElement("section");

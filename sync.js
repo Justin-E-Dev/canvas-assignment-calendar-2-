@@ -3,7 +3,16 @@
 // Loaded before the page's own scripts so every localStorage write is noticed.
 // Your Canvas feed link is never synced.
 (function () {
-  const WHOLE = { "cac.books": "books", "cac.done": "done", "cac.estimates": "estimates", "cac.quizScores": "quizScores" };
+  const WHOLE = {
+    "cac.books": "books",
+    "cac.booksRemoved": "booksRemoved",
+    "cac.done": "done",
+    "cac.estimates": "estimates",
+    "cac.quizScores": "quizScores",
+  };
+  // Books are combined book by book instead of one device's list replacing
+  // another's, so a book added on one device is never wiped out by another.
+  const BOOK_FIELDS = ["books", "booksRemoved"];
   const GEN = "cac.genNotes";
   const META_KEY = "cac.sync"; // { known: { field: { at, h } }, dirty: { field: true } }
   const rawSet = Storage.prototype.setItem;
@@ -69,11 +78,75 @@
     return data;
   }
 
+  // ----- Combining book lists -----
+  const bookKey = (course, b) => `${course}|${b.isbn || b.title}`;
+  function mergeRemoved(a, b) {
+    const out = { ...(a || {}) };
+    for (const [k, t] of Object.entries(b || {})) out[k] = Math.max(out[k] || 0, t);
+    return out;
+  }
+  // Every book on either side, except ones removed after they were added.
+  function mergeBooks(a, b, removed) {
+    const out = {};
+    for (const side of [a, b]) {
+      for (const [course, list] of Object.entries(side || {})) {
+        for (const book of Array.isArray(list) ? list : []) {
+          const k = bookKey(course, book);
+          if (removed[k] && (book.addedAt || 0) <= removed[k]) continue;
+          const shelf = (out[course] ||= []);
+          const at = shelf.findIndex((x) => bookKey(course, x) === k);
+          if (at < 0) shelf.push(book);
+          else if ((book.addedAt || 0) > (shelf[at].addedAt || 0)) shelf[at] = book;
+        }
+      }
+    }
+    return out;
+  }
+  const same = (x, y) => JSON.stringify(x) === JSON.stringify(y);
+  // Combine the server's books with this device's and save the result here.
+  // Returns true if this device's copy changed.
+  function combineBooks(serverBooks, serverRemoved) {
+    const localBooks = read("cac.books", undefined);
+    const localRemoved = read("cac.booksRemoved", undefined);
+    const removed = mergeRemoved(serverRemoved, localRemoved);
+    const books = mergeBooks(localBooks, serverBooks, removed);
+    let changed = false;
+    if (!same(books, localBooks || {}) && (localBooks !== undefined || Object.keys(books).length)) {
+      write("cac.books", books);
+      changed = true;
+    }
+    if (!same(removed, localRemoved || {}) && (localRemoved !== undefined || Object.keys(removed).length)) {
+      write("cac.booksRemoved", removed);
+      changed = true;
+    }
+    // Anything the server is missing gets sent up.
+    if (!same(books, serverBooks || {})) meta.dirty.books = true;
+    if (!same(removed, serverRemoved || {})) meta.dirty.booksRemoved = true;
+    return changed;
+  }
+  // Right before sending books: fetch the server's latest and combine first.
+  async function refreshBooksBeforePush() {
+    const { values } = await api({ op: "get", fields: BOOK_FIELDS });
+    const sv = (f) => (values[f] ? values[f].value : undefined);
+    combineBooks(sv("books"), sv("booksRemoved"));
+    for (const f of BOOK_FIELDS) {
+      if (values[f]) meta.known[f] = { at: values[f].at, h: hash(JSON.stringify(values[f].value)) };
+    }
+    saveMeta();
+  }
+
   let pushing = null;
   async function push() {
     if (off) return;
     if (pushing) return pushing.then(push);
     pushing = (async () => {
+      if (BOOK_FIELDS.some((f) => meta.dirty[f])) {
+        try {
+          await refreshBooksBeforePush();
+        } catch {
+          return; // offline or not set up: try again later
+        }
+      }
       const now = localFields();
       for (const f of Object.keys(meta.dirty)) {
         const value = f in now ? now[f] : null;
@@ -143,13 +216,23 @@
   async function pull() {
     const { meta: server } = await api({ op: "meta" });
     const now = localFields();
-    const need = Object.keys(server).filter((f) => !meta.dirty[f] && (!meta.known[f] || meta.known[f].at !== server[f]));
+    const need = Object.keys(server).filter(
+      (f) => (BOOK_FIELDS.includes(f) || !meta.dirty[f]) && (!meta.known[f] || meta.known[f].at !== server[f])
+    );
     let changed = false;
     if (need.length) {
       const { values } = await api({ op: "get", fields: need });
       if (window.cacBusy) return false; // Gemini is writing: don't disturb it, sync next time
       const gen = read(GEN, {}) || {};
+      if (BOOK_FIELDS.some((f) => values[f])) {
+        const sv = (f) => (values[f] ? values[f].value : undefined);
+        if (combineBooks(sv("books"), sv("booksRemoved"))) changed = true;
+        for (const f of BOOK_FIELDS) {
+          if (values[f]) meta.known[f] = { at: values[f].at, h: hash(JSON.stringify(values[f].value)) };
+        }
+      }
       for (const [f, { value, at }] of Object.entries(values)) {
+        if (BOOK_FIELDS.includes(f)) continue;
         let v = value;
         const firstTime = !meta.known[f] && f in now;
         if (firstTime) v = firstMerge(f, value, now[f]);
@@ -163,7 +246,7 @@
     }
     // Deleted on another device.
     for (const f of Object.keys(meta.known)) {
-      if (!(f in server) && !meta.dirty[f]) {
+      if (!(f in server) && !meta.dirty[f] && !BOOK_FIELDS.includes(f)) {
         if (window.cacBusy) continue;
         delete meta.known[f];
         if (f.startsWith("gen:")) {
