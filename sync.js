@@ -18,6 +18,18 @@
   const rawSet = Storage.prototype.setItem;
   const rawGet = Storage.prototype.getItem;
   let off = false; // server has no database: stop trying for this page
+  // What the last sync did, shown in Settings and the Learning Center.
+  const status = { state: "checking", at: 0, message: "" };
+  function setStatus(state, message) {
+    status.state = state;
+    status.message = message || "";
+    if (state === "ok") status.at = Date.now();
+    try {
+      window.dispatchEvent(new CustomEvent("cac:sync", { detail: { ...status } }));
+    } catch {
+      /* old browser */
+    }
+  }
 
   const read = (k, d) => {
     try {
@@ -66,15 +78,27 @@
   }
 
   async function api(body) {
-    const res = await fetch("/api/sync", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      keepalive: body.op === "set" && JSON.stringify(body).length < 60000,
-    });
+    let res;
+    try {
+      res = await fetch("/api/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        keepalive: body.op === "set" && JSON.stringify(body).length < 60000,
+      });
+    } catch {
+      throw new Error("Couldn't reach the website (offline?).");
+    }
     const data = await res.json().catch(() => ({}));
     if (res.status === 503 || res.status === 404) off = true;
-    if (!res.ok) throw new Error(data.error || `Sync answered ${res.status}`);
+    if (!res.ok) {
+      let why = data.error || `Sync answered ${res.status}`;
+      if (res.status === 503) why = "Sync isn't set up on this web address: no database is connected to it in Vercel.";
+      if (res.status === 404) why = "This web address has no sync helper (it may be an old or preview copy of the site).";
+      if (res.status === 403) why = "This web address isn't allowed to sync.";
+      if (res.status === 413) why = "Too much to send at once (very large notes).";
+      throw new Error(why);
+    }
     return data;
   }
 
@@ -143,7 +167,8 @@
       if (BOOK_FIELDS.some((f) => meta.dirty[f])) {
         try {
           await refreshBooksBeforePush();
-        } catch {
+        } catch (err) {
+          setStatus("error", `Couldn't send changes: ${err.message}`);
           return; // offline or not set up: try again later
         }
       }
@@ -156,7 +181,8 @@
           else meta.known[f] = { at, h: hash(JSON.stringify(value)) };
           delete meta.dirty[f];
           saveMeta();
-        } catch {
+        } catch (err) {
+          setStatus("error", `Couldn't send changes: ${err.message}`);
           break; // offline or not set up: try again later
         }
       }
@@ -264,7 +290,6 @@
     return changed;
   }
 
-  window.cacSync = { push, pull };
 
   // Show what came from another device by reloading the page. Not while you're
   // typing or Gemini is writing: then it waits until you're done.
@@ -286,14 +311,74 @@
   function syncNow() {
     if (off) return Promise.resolve();
     lastCheck = Date.now();
-    return pull().then((changed) => {
-      push();
+    setStatus("checking");
+    return pull().then(async (changed) => {
+      await push();
+      if (status.state === "checking") setStatus("ok");
       if (changed) pendingReload = true;
       showChanges();
-    }).catch(() => {
-      /* offline or sync not set up: everything still works on this device */
+    }).catch((err) => {
+      // Everything still works on this device; Settings says what went wrong.
+      setStatus("error", err.message);
     });
   }
+
+  // ----- Backup file -----
+  const BACKUP_KEYS = [...Object.keys(WHOLE), GEN];
+  function backup() {
+    const data = {};
+    for (const k of BACKUP_KEYS) {
+      const v = read(k, undefined);
+      if (v !== undefined) data[k] = v;
+    }
+    return { app: "efficient-learning", version: 1, savedAt: new Date().toISOString(), data };
+  }
+  // Adds what's in a backup file to what's here (nothing here is lost).
+  function restore(file) {
+    const data = file && file.data;
+    if (!data || typeof data !== "object") throw new Error("That isn't a backup file from this site.");
+    const removed = mergeRemoved(read("cac.booksRemoved", {}), data["cac.booksRemoved"]);
+    const books = mergeBooks(read("cac.books", {}), data["cac.books"], removed);
+    const out = { "cac.books": books, "cac.booksRemoved": removed };
+    for (const k of ["cac.done", "cac.estimates", "cac.quizScores"]) {
+      if (data[k] !== undefined) out[k] = firstMerge(WHOLE[k], read(k, undefined), data[k]);
+    }
+    if (data[GEN]) {
+      const gen = read(GEN, {}) || {};
+      for (const [id, book] of Object.entries(data[GEN])) gen[id] = firstMerge(`gen:${id}`, gen[id], book);
+      out[GEN] = gen;
+    }
+    for (const [k, v] of Object.entries(out)) {
+      try {
+        localStorage.setItem(k, JSON.stringify(v)); // noticed by sync, so it goes to other devices too
+      } catch {
+        throw new Error("Your browser's storage is full. Remove some generated notes and try again.");
+      }
+    }
+    let count = 0;
+    for (const list of Object.values(books)) count += list.length;
+    return { books: count };
+  }
+
+  function bookCount() {
+    let n = 0;
+    for (const list of Object.values(read("cac.books", {}) || {})) n += Array.isArray(list) ? list.length : 0;
+    return n;
+  }
+
+  window.cacSync = {
+    push,
+    pull,
+    status: () => ({ ...status, off, books: bookCount() }),
+    // "Sync now": check right away and show anything new.
+    now: () => {
+      sessionStorage.removeItem("cac.syncReload");
+      off = false;
+      return syncNow().then(() => ({ ...status, books: bookCount() }));
+    },
+    backup,
+    restore,
+  };
   let lastCheck = 0;
   syncNow();
   // Check again when you come back to the site (switching tabs or apps, or

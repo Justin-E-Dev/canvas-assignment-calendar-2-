@@ -504,6 +504,8 @@ if (typeof document !== "undefined") {
     $("app").classList.add("hidden");
     $("tabs").classList.add("hidden");
     $("setup").classList.remove("hidden");
+    $("closeSetupBtn").classList.toggle("hidden", !state.events.length);
+    showSync();
     $("feedUrl").value = load(STORE.feedUrl, "");
   }
 
@@ -612,6 +614,67 @@ if (typeof document !== "undefined") {
     loadFromUrl(load(STORE.feedUrl, "")); // falls back to the link saved on the website
   };
   $("settingsBtn").onclick = showSetup;
+  $("closeSetupBtn").onclick = showApp;
+
+  // ----- Sync & backup -----
+  function syncText(st) {
+    const books = `${st.books} book${st.books === 1 ? "" : "s"} on this device`;
+    if (st.state === "checking") return { text: `Syncing… · ${books}`, bad: false };
+    if (st.state === "error") return { text: `Not syncing: ${st.message} · ${books}`, bad: true };
+    const at = st.at ? new Date(st.at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : "";
+    return { text: `Synced${at ? ` at ${at}` : ""} · ${books}`, bad: false };
+  }
+  function showSync() {
+    if (!window.cacSync) return;
+    const { text, bad } = syncText(window.cacSync.status());
+    for (const id of ["syncState", "learnSync"]) {
+      $(id).textContent = text;
+      $(id).classList.toggle("bad", bad);
+    }
+  }
+  window.addEventListener("cac:sync", showSync);
+  showSync();
+  async function syncNowClick(btn) {
+    btn.disabled = true;
+    $("syncMsg").textContent = "";
+    await window.cacSync.now();
+    btn.disabled = false;
+    showSync();
+  }
+  $("syncNowBtn").onclick = () => syncNowClick($("syncNowBtn"));
+  $("learnSyncBtn").onclick = () => syncNowClick($("learnSyncBtn"));
+
+  $("backupBtn").onclick = () => {
+    const blob = new Blob([JSON.stringify(window.cacSync.backup())], { type: "application/json" });
+    const a = Object.assign(document.createElement("a"), {
+      href: URL.createObjectURL(blob),
+      download: `efficient-learning-backup-${new Date().toISOString().slice(0, 10)}.json`,
+    });
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    $("syncMsg").className = "msg";
+    $("syncMsg").textContent = "Backup saved to your downloads. Open this page on your other device and use Restore from file.";
+  };
+  $("restoreInput").onchange = (ev) => {
+    const file = ev.target.files[0];
+    ev.target.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const { books } = window.cacSync.restore(JSON.parse(reader.result));
+        $("syncMsg").className = "msg";
+        $("syncMsg").textContent = `Restored. You now have ${books} book${books === 1 ? "" : "s"}. Reloading…`;
+        setTimeout(() => location.reload(), 1200);
+      } catch (err) {
+        $("syncMsg").className = "msg error";
+        $("syncMsg").textContent = err instanceof SyntaxError ? "That file isn't a backup from this site." : err.message;
+      }
+    };
+    reader.readAsText(file);
+  };
 
   $("prevBtn").onclick = () => {
     state.weekStart = addDays(state.weekStart, -7);

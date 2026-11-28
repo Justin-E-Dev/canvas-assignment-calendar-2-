@@ -72,6 +72,7 @@
 
       <!-- First-time setup -->
       <section id="setup" class="setup glass hidden">
+        <button id="closeSetupBtn" class="btn btn-ghost btn-small setup-back hidden" type="button">&lsaquo; Back to my board</button>
         <h2>Connect your Canvas calendar</h2>
         <ol>
           <li>In Canvas, open <strong>Calendar</strong> and click <strong>Calendar Feed</strong> (bottom right).</li>
@@ -90,6 +91,22 @@
         </label>
         <p class="note">You only need to do this once: the website remembers your link for every device and keeps your assignments up to date on its own. Keep the link private.</p>
         <p id="setupMsg" class="msg"></p>
+
+        <div class="sync-box">
+          <h2>Sync &amp; backup</h2>
+          <p class="note">Your books, notes, check-offs and time estimates are copied to your other devices on their own. If something is missing on a device, press <strong>Sync now</strong> there.</p>
+          <p id="syncState" class="sync-state">Checking…</p>
+          <div class="row sync-buttons">
+            <button id="syncNowBtn" class="btn" type="button">Sync now</button>
+            <button id="backupBtn" class="btn btn-ghost" type="button">Back up to file</button>
+            <label class="btn btn-ghost file-btn">
+              Restore from file
+              <input id="restoreInput" type="file" accept=".json,application/json" hidden>
+            </label>
+          </div>
+          <p class="note">Backup file: works even if syncing doesn't. Back up on the device that has everything, then restore on the other one. Restoring adds to what's there; it never deletes anything.</p>
+          <p id="syncMsg" class="msg"></p>
+        </div>
       </section>
 
       <main id="app" class="hidden">
@@ -156,6 +173,7 @@
         <div id="learnView" class="hidden">
           <section class="learn-head glass">
             <p class="learn-intro">Add the books for each class. Type an ISBN to find an exact book, or search by title or author. Open a book to read its notes, key concepts, flashcards and quiz.</p>
+            <p class="learn-sync"><span id="learnSync"></span> <button id="learnSyncBtn" class="link-btn" type="button">Sync now</button></p>
           </section>
           <div id="classList" class="class-grid"></div>
         </div>

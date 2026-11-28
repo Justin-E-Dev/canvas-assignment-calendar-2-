@@ -65,4 +65,6 @@ computer and phone through a free Upstash Redis database (`api/sync.js`, `sync.j
 Set it up once in Vercel: **Storage → Create Database → Upstash for Redis (free)**,
 connect it to this project, then redeploy. Vercel adds the database's URL and token
 as environment variables automatically. Without it, everything still works, but
-each device keeps its own copy. The Canvas feed link is kept in the same database (never sent back to a page), so you only paste it once.
+each device keeps its own copy.
+
+**Settings → Sync & backup** shows whether this device is syncing (and why not, if it isn't), has a **Sync now** button, and can **Back up to file** / **Restore from file** to move everything between devices by hand. Restoring only adds; it never deletes. The Canvas feed link is kept in the same database (never sent back to a page), so you only paste it once.
