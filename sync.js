@@ -266,28 +266,44 @@
 
   window.cacSync = { push, pull };
 
+  // Show what came from another device by reloading the page. Not while you're
+  // typing or Gemini is writing: then it waits until you're done.
+  let pendingReload = false;
+  const typing = () => {
+    const el = document.activeElement;
+    return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
+  };
+  function showChanges() {
+    if (!pendingReload) return;
+    if (window.cacBusy || typing() || document.visibilityState !== "visible") return;
+    const last = Number(sessionStorage.getItem("cac.syncReload") || 0);
+    if (Date.now() - last < 15000) return setTimeout(showChanges, 15000 - (Date.now() - last)); // never loops
+    sessionStorage.setItem("cac.syncReload", String(Date.now()));
+    location.reload();
+  }
+  document.addEventListener("focusout", () => setTimeout(showChanges, 300));
+
   function syncNow() {
     if (off) return Promise.resolve();
+    lastCheck = Date.now();
     return pull().then((changed) => {
       push();
-      if (!changed || window.cacBusy) return;
-      // Show what came from the other device (once; never loops).
-      const last = Number(sessionStorage.getItem("cac.syncReload") || 0);
-      if (Date.now() - last > 15000) {
-        sessionStorage.setItem("cac.syncReload", String(Date.now()));
-        location.reload();
-      }
+      if (changed) pendingReload = true;
+      showChanges();
     }).catch(() => {
       /* offline or sync not set up: everything still works on this device */
     });
   }
+  let lastCheck = 0;
   syncNow();
-  // Coming back to the tab (e.g. switching apps on a phone): check for changes again.
-  let lastCheck = Date.now();
-  document.addEventListener("visibilitychange", () => {
+  // Check again when you come back to the site (switching tabs or apps, or
+  // clicking back into the browser window on a computer), and every minute
+  // while it's open on screen.
+  const checkAgain = () => {
     if (document.visibilityState !== "visible" || Date.now() - lastCheck < 20000) return;
-    lastCheck = Date.now();
-    sessionStorage.removeItem("cac.syncReload");
     syncNow();
-  });
+  };
+  document.addEventListener("visibilitychange", checkAgain);
+  window.addEventListener("focus", checkAgain);
+  setInterval(checkAgain, 60000);
 })();
