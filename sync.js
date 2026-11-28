@@ -39,13 +39,22 @@
       return d;
     }
   };
+  // Returns false if it couldn't be saved. When storage is full, drops things
+  // that are easy to get back (cover cache, cached calendar) and tries again.
   const write = (k, v) => {
-    try {
-      rawSet.call(localStorage, k, JSON.stringify(v));
-    } catch {
-      /* storage full or blocked */
+    const text = JSON.stringify(v);
+    for (const spare of [null, "cac.coverCache", "cac.lastIcs"]) {
+      try {
+        if (spare) localStorage.removeItem(spare);
+        rawSet.call(localStorage, k, text);
+        return true;
+      } catch {
+        /* storage full or blocked: try making room */
+      }
     }
+    return false;
   };
+  const FULL = "This browser's storage is full. Remove some generated book notes on this device to make room.";
   const meta = read(META_KEY, {});
   meta.known ||= {};
   meta.dirty ||= {};
@@ -136,11 +145,11 @@
     const books = mergeBooks(localBooks, serverBooks, removed);
     let changed = false;
     if (!same(books, localBooks || {}) && (localBooks !== undefined || Object.keys(books).length)) {
-      write("cac.books", books);
+      if (!write("cac.books", books)) throw new Error(FULL);
       changed = true;
     }
     if (!same(removed, localRemoved || {}) && (localRemoved !== undefined || Object.keys(removed).length)) {
-      write("cac.booksRemoved", removed);
+      if (!write("cac.booksRemoved", removed)) throw new Error(FULL);
       changed = true;
     }
     // Anything the server is missing gets sent up.
@@ -173,7 +182,9 @@
         }
       }
       const now = localFields();
-      for (const f of Object.keys(meta.dirty)) {
+      // Books first; one field that fails (say, very large notes) doesn't stop the rest.
+      const fields = Object.keys(meta.dirty).sort((a, b) => BOOK_FIELDS.includes(b) - BOOK_FIELDS.includes(a));
+      for (const f of fields) {
         const value = f in now ? now[f] : null;
         try {
           const { at } = await api({ op: "set", field: f, value });
@@ -182,8 +193,8 @@
           delete meta.dirty[f];
           saveMeta();
         } catch (err) {
-          setStatus("error", `Couldn't send changes: ${err.message}`);
-          break; // offline or not set up: try again later
+          setStatus("error", `Couldn't send ${f.startsWith("gen:") ? "one book's notes" : f}: ${err.message}`);
+          if (off || /reach the website/.test(err.message)) break; // offline or not set up: try again later
         }
       }
     })();
@@ -246,8 +257,24 @@
       (f) => (BOOK_FIELDS.includes(f) || !meta.dirty[f]) && (!meta.known[f] || meta.known[f].at !== server[f])
     );
     let changed = false;
+    let problem = "";
     if (need.length) {
-      const { values } = await api({ op: "get", fields: need });
+      // Fetch in small pieces: books first, then the small settings, then each
+      // book's notes on its own. One piece that fails doesn't stop the others.
+      const pieces = [
+        need.filter((f) => BOOK_FIELDS.includes(f)),
+        need.filter((f) => !BOOK_FIELDS.includes(f) && !f.startsWith("gen:")),
+        ...need.filter((f) => f.startsWith("gen:")).map((f) => [f]),
+      ].filter((p) => p.length);
+      const values = {};
+      for (const piece of pieces) {
+        try {
+          Object.assign(values, (await api({ op: "get", fields: piece })).values);
+        } catch (err) {
+          if (piece.some((f) => BOOK_FIELDS.includes(f)) || off || /reach the website/.test(err.message)) throw err;
+          problem = `Couldn't download ${piece[0].startsWith("gen:") ? "one book's notes" : "some settings"}: ${err.message}`;
+        }
+      }
       if (window.cacBusy) return false; // Gemini is writing: don't disturb it, sync next time
       const gen = read(GEN, {}) || {};
       if (BOOK_FIELDS.some((f) => values[f])) {
@@ -263,12 +290,19 @@
         const firstTime = !meta.known[f] && f in now;
         if (firstTime) v = firstMerge(f, value, now[f]);
         if (f.startsWith("gen:")) gen[f.slice(4)] = v;
-        else write(Object.keys(WHOLE).find((k) => WHOLE[k] === f), v);
+        else if (!write(Object.keys(WHOLE).find((k) => WHOLE[k] === f), v)) {
+          problem = FULL;
+          continue; // not saved: fetch it again next time
+        }
         meta.known[f] = { at, h: hash(JSON.stringify(value)) };
         if (JSON.stringify(v) !== JSON.stringify(value)) meta.dirty[f] = true; // merged: send back
         changed = true;
       }
-      write(GEN, gen);
+      if (!write(GEN, gen)) {
+        // Notes didn't fit: forget them so they're fetched again once there's room.
+        for (const f of Object.keys(values)) if (f.startsWith("gen:")) delete meta.known[f];
+        problem = FULL;
+      }
     }
     // Deleted on another device.
     for (const f of Object.keys(meta.known)) {
@@ -287,6 +321,7 @@
     }
     saveMeta();
     markChanges(); // anything only on this device gets sent up
+    if (problem) setStatus("error", problem);
     return changed;
   }
 
